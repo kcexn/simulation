@@ -11,7 +11,9 @@ class Process(object):
         self.rng = random.default_rng()
     
     def get_interrenewal_time(self):
-        return self.rng.exponential(1)
+        return self.rng.exponential(
+            self.rng.exponential(1)
+        )
     
 class ArrivalProcess(Process):
     """Generates Arrival Events"""

@@ -8,6 +8,9 @@ class Work(object):
         self.start_time = None
         self.finish_time = None
 
+    def get_id(self):
+        return self.id
+
 
 class Task(Work):
     def __init__(self, simulation):
@@ -19,9 +22,6 @@ class Task(Work):
     
     def is_started(self):
         return False if self.start_time is None else True
-    
-    def get_id(self):
-        return self.id
     
     def set_start_time(self, time):
         self.start_time = time
@@ -40,3 +40,9 @@ class Task(Work):
             return self.finish_time
         else:
             raise ValueError(f'Task {self.get_id()} not yet finished.')
+        
+
+class Job(Work):
+    """A Collection of Tasks"""
+    def __init__(self,simulation):
+        super(Job, self).__init__(simulation)
