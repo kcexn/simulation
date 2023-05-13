@@ -5,10 +5,10 @@ from processes import ArrivalProcess,CompletionProcess
 
 class Simulation(object):
     INITIAL_TIME=0
-    NUM_TASKS=100
-    SIMULATION_TIME=10
+    NUM_JOBS=1
+    SIMULATION_TIME=100000
     def __init__(self):
-        self.tasks = []
+        self.work = []
         self.time = Simulation.INITIAL_TIME
         self.arrival_process = ArrivalProcess(self)
         self.completion_process = CompletionProcess(self)
@@ -21,12 +21,17 @@ class Simulation(object):
         self.time = time
 
     def generate_task_arrivals(self):
-        for _ in range(Simulation.NUM_TASKS):
+        for _ in range(Simulation.NUM_JOBS):
             self.event_queue.put(self.arrival_process.get_task())
+
+    def generate_job_arrivals(self):
+        for _ in range(Simulation.NUM_JOBS):
+            self.event_queue.put(self.arrival_process.get_job())
 
     def run(self):
         logging.debug('running...')
-        self.generate_task_arrivals()
+        # self.generate_task_arrivals()
+        self.generate_job_arrivals()
         while not self.event_queue.empty():
             time,event = self.event_queue.get()
             if time > Simulation.SIMULATION_TIME:

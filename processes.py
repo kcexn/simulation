@@ -1,7 +1,7 @@
 import logging
 from numpy import random
 
-from events import TaskArrival,TaskCompletion
+from events import TaskArrival,TaskCompletion,JobArrival,JobCompletion
 
 
 class Process(object):
@@ -26,6 +26,11 @@ class ArrivalProcess(Process):
         self.arrival_time = self.arrival_time + self.get_interrenewal_time()
         event = TaskArrival(self.simulation)
         return (self.arrival_time, event)
+    
+    def get_job(self):
+        self.arrival_time = self.arrival_time + self.get_interrenewal_time()
+        event = JobArrival(self.simulation)
+        return (self.arrival_time, event)
 
     def get_arrival_time(self):
         return self.arrival_time
@@ -40,6 +45,9 @@ class CompletionProcess(Process):
         completion_time = self.simulation.get_simulation_time() + self.get_interrenewal_time()
         event = TaskCompletion(self.simulation, task)
         return (completion_time, event)
+    
+    def get_job_completion(self,job):
+        return JobCompletion(self.simulation, job)
 
 
 

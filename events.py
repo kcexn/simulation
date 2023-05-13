@@ -1,17 +1,28 @@
 import logging
 
-from work import Task
+from work import Task,Job
 
 class Event(object):
     """Events are asynchronous simulation actions that are queued."""
     def __init__(self, simulation):
-        self.id = id(self)
         self.simulation=simulation
     
     def resolve(self):
         raise NotImplementedError()
     
     def get_id(self):
+        return id(self)
+    
+    def __eq__(self, other):
+        return self.__class__ == other.__class__
+    
+    def __lt__(self,other):
+        if other.__class__.__mro__[-2] == Event:
+            return self.__repr__() > other.__repr__()
+        else:
+            raise TypeError(f"can't compare {self} with {other}. {other} doesn't extend Event.")
+
+    def __repr__(self):
         raise NotImplementedError()
     
 class Arrival(Event):
@@ -22,7 +33,7 @@ class Arrival(Event):
     def resolve(self):
         raise NotImplementedError()
     
-    def get_id(self):
+    def __repr__(self):
         raise NotImplementedError()
     
 class Completion(Event):
@@ -33,8 +44,8 @@ class Completion(Event):
     def resolve(self):
         raise NotImplementedError()
     
-    def get_id(self):
-        raise NotImplementedError
+    def __repr__(self):
+        raise NotImplementedError()
     
 class TaskArrival(Arrival):
     def __init__(self, simulation):
@@ -44,10 +55,10 @@ class TaskArrival(Arrival):
         task = Task(self.simulation)
         logging.debug(f'start time: {task.get_start_time()}, task: {task.get_id()}')
         self.simulation.event_queue.put(self.simulation.completion_process.get_task_completion(task))
-        self.simulation.tasks.append(task)
+        self.simulation.work.append(task)
 
-    def get_id(self):
-        return self.id
+    def __repr__(self):
+        return "TaskArrival"
     
 class TaskCompletion(Completion):
     def __init__(self, simulation, task):
@@ -58,5 +69,38 @@ class TaskCompletion(Completion):
         self.task.set_finish_time(self.simulation.get_simulation_time())
         logging.debug(f'finish time: {self.task.get_finish_time()}, task: {self.task.get_id()}')
 
-    def get_id(self):
-        return self.id
+    def __repr__(self):
+        return "TaskCompetion"
+
+class JobArrival(Arrival):
+    def __init__(self, simulation):
+        super(JobArrival, self).__init__(simulation)
+
+    def resolve(self):
+        job = Job(self.simulation)
+        logging.debug(f'start time: {job.get_start_time()}, job: {job.get_id()}')
+        task_events = [self.simulation.completion_process.get_task_completion(task) for task in job.tasks]
+        max_time = max(task_events)[0]
+        for task_event in task_events:
+            self.simulation.event_queue.put(task_event)
+        self.simulation.event_queue.put((max_time, self.simulation.completion_process.get_job_completion(job)))
+        self.simulation.work.append(job)
+
+    def __repr__(self):
+        return "JobArrival"
+
+
+class JobCompletion(Completion):
+    def __init__(self,simulation, job):
+        super(JobCompletion, self).__init__(simulation)
+        self.job = job
+
+    def resolve(self):
+        time = self.simulation.get_simulation_time()
+        self.job.set_finish_time(self.simulation.get_simulation_time())
+        logging.debug(f'finish time: {self.job.get_finish_time()}, job: {self.job.get_id()}')
+
+    def __repr__(self):
+        return "JobCompletion"
+
+

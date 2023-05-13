@@ -4,19 +4,12 @@ import logging
 class Work(object):
     def __init__(self,simulation):
         self.simulation = simulation
-        self.id = id(self)
         self.start_time = None
         self.finish_time = None
 
     def get_id(self):
-        return self.id
-
-
-class Task(Work):
-    def __init__(self, simulation):
-        super(Task, self).__init__(simulation)
-        self.set_start_time(self.simulation.get_simulation_time())
-
+        return id(self)
+    
     def is_finished(self):
         return False if self.finish_time is None else True
     
@@ -40,9 +33,22 @@ class Task(Work):
             return self.finish_time
         else:
             raise ValueError(f'Task {self.get_id()} not yet finished.')
-        
+    
+
+class Task(Work):
+    def __init__(self, simulation):
+        super(Task, self).__init__(simulation)
+        self.set_start_time(self.simulation.get_simulation_time())
+
 
 class Job(Work):
+    NUM_TASKS = 1
     """A Collection of Tasks"""
     def __init__(self,simulation):
         super(Job, self).__init__(simulation)
+        self.set_start_time(self.simulation.get_simulation_time())
+        self.tasks = [Task(simulation)]*Job.NUM_TASKS
+    
+    def get_tasks(self):
+        return self.tasks
+        
