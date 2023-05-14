@@ -4,7 +4,7 @@ import logging
 class Work(object):
     def __init__(self,simulation):
         self.simulation = simulation
-        self.start_time = None
+        self.start_time = simulation.get_simulation_time()
         self.finish_time = None
 
     def get_id(self):
@@ -38,17 +38,14 @@ class Work(object):
 class Task(Work):
     def __init__(self, simulation):
         super(Task, self).__init__(simulation)
-        self.set_start_time(self.simulation.get_simulation_time())
 
 
 class Job(Work):
-    NUM_TASKS = 1
+    NUM_TASKS = 2
     """A Collection of Tasks"""
     def __init__(self,simulation):
         super(Job, self).__init__(simulation)
-        self.set_start_time(self.simulation.get_simulation_time())
-        self.tasks = [Task(simulation)]*Job.NUM_TASKS
+        self.tasks = [Task(simulation) for _ in range(Job.NUM_TASKS)]
     
     def get_tasks(self):
         return self.tasks
-        

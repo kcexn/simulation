@@ -11,9 +11,10 @@ class Process(object):
         self.rng = random.default_rng()
     
     def get_interrenewal_time(self):
-        return self.rng.exponential(
-            self.rng.exponential(1)
-        )
+        return self.rng.exponential(1)
+    
+    def get_id(self):
+        return id(self)
     
 class ArrivalProcess(Process):
     """Generates Arrival Events"""
@@ -37,7 +38,7 @@ class ArrivalProcess(Process):
     
 
 class CompletionProcess(Process):
-    """Execution Time Generation"""
+    """Generates Completion Events"""
     def __init__(self,simulation):
         super(CompletionProcess,self).__init__(simulation)
     
