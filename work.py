@@ -36,8 +36,15 @@ class Work(object):
     
 
 class Task(Work):
-    def __init__(self, simulation):
+    def __init__(self, simulation, job=None):
         super(Task, self).__init__(simulation)
+        self.job = job
+
+    def get_job(self):
+        if self.job is not None:
+            return self.job
+        else:
+            raise AttributeError(f'task {self.get_id()} does not belong to any jobs.')
 
 
 class Job(Work):
@@ -45,7 +52,7 @@ class Job(Work):
     """A Collection of Tasks"""
     def __init__(self,simulation):
         super(Job, self).__init__(simulation)
-        self.tasks = [Task(simulation) for _ in range(Job.NUM_TASKS)]
+        self.tasks = [Task(simulation,job=self) for _ in range(Job.NUM_TASKS)]
     
     def get_tasks(self):
         return self.tasks

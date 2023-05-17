@@ -48,7 +48,8 @@ class CompletionProcess(Process):
         return (completion_time, event)
     
     def get_job_completion(self,job):
-        return JobCompletion(self.simulation, job)
+        """Job completion only get scheduled once all tasks in a job are complete"""
+        return (self.simulation.get_simulation_time(), JobCompletion(self.simulation, job))
 
 
 
