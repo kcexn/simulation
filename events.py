@@ -7,10 +7,21 @@ class Event(object):
     ORDER = 0 # default constant for event order comparisons
     def __init__(self, simulation):
         self.simulation=simulation
+        self.canceled = False
     
+    def cancel(self):
+        if self.canceled is False:
+            self.canceled = True
+        else:
+            logging.debug('event {self.get_id()} is already canceled.')
+            raise ValueError(f'event {self.get_id()} is already canceled.')
+
+    def is_canceled(self):
+        return self.canceled
+
     def resolve(self):
         raise NotImplementedError()
-    
+
     def get_id(self):
         return id(self)
     
@@ -39,7 +50,11 @@ class Completion(Event):
     def __init__(self,simulation):
         super(Completion,self).__init__(simulation)
 
-    
+    def resolve(self):
+        if self.is_canceled():
+            logging.debug(f'Event {self.get_id()} has already been completed.')
+            raise RuntimeError(f'Event {self.get_id()} has already been completed.')
+
 class TaskArrival(Arrival):
     def __init__(self, simulation):
         super(TaskArrival, self).__init__(simulation)
@@ -59,11 +74,16 @@ class TaskCompletion(Completion):
         self.task = task
 
     def resolve(self):
-        self.simulation.scheduler.complete_task(self.task)
-        logging.debug(f'finish time: {self.task.get_finish_time()}, task: {self.task.get_id()}')
+        try:
+            super(TaskCompletion, self).resolve()
+        except RuntimeError:
+            pass
+        else:
+            self.simulation.scheduler.complete_task(self.task)
+            logging.debug(f'finish time: {self.task.get_finish_time()}, task: {self.task.get_id()}')
 
     def __repr__(self):
-        return "TaskCompetion"
+        return "TaskCompletion"
 
 class JobArrival(Arrival):
     def __init__(self, simulation):
@@ -85,8 +105,13 @@ class JobCompletion(Completion):
         self.job = job
 
     def resolve(self):
-        self.simulation.scheduler.complete_job(self.job)
-        logging.debug(f'finish time: {self.job.get_finish_time()}, job: {self.job.get_id()}')
+        try:
+            super(JobCompletion,self).resolve()
+        except RuntimeError:
+            pass
+        else:
+            self.simulation.scheduler.complete_job(self.job)
+            logging.debug(f'finish time: {self.job.get_finish_time()}, job: {self.job.get_id()}')
 
     def __repr__(self):
         return "JobCompletion"

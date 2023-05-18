@@ -1,10 +1,12 @@
 import logging
 from queue import PriorityQueue
+import csv
 
 from computer import Scheduler
+from work import Job
 class Simulation(object):
     INITIAL_TIME=0
-    NUM_JOBS=1
+    NUM_JOBS=100
     SIMULATION_TIME=100000
     def __init__(self):
         self.work = []
@@ -34,3 +36,10 @@ if __name__ == "__main__":
     logging.basicConfig(level='DEBUG')
     simulation = Simulation()
     simulation.run()
+    jobs = [work for work in simulation.work if work.__class__ == Job]
+    with open('sim_data.csv', 'w', newline='') as f:
+        writer = csv.writer(f, dialect='excel')
+        writer.writerow(['start time', 'finish time', 'num tasks', 'job latency'])
+        for job in jobs:
+            sim_data = [job.get_start_time(), job.get_finish_time(), len(job.get_tasks()), job.get_finish_time()-job.get_start_time()]
+            writer.writerow(sim_data)
