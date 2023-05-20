@@ -53,6 +53,13 @@ class Task(Work):
         else:
             raise AttributeError(f'task {self.get_id()} does not belong to any jobs.')
         
+    def set_finish_time(self, time):
+        super(Task,self).set_finish_time(time)
+        tasks = [task for task in self.get_job().get_tasks()]
+        if False not in (task.is_finished() for task in tasks):
+            job = self.get_job()
+            logging.debug(f'completion time: {time} for job: {job.get_id()}')
+            job.set_finish_time(self.simulation.get_simulation_time())
 
 
 class Job(Work):

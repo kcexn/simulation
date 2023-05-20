@@ -5,9 +5,10 @@ from work import Task,Job
 class Event(object):
     """Events are asynchronous simulation actions that are queued."""
     ORDER = 0 # default constant for event order comparisons
-    def __init__(self, simulation):
+    def __init__(self, simulation, arrival_time):
         self.simulation=simulation
         self.canceled = False
+        self.arrival_time = arrival_time
     
     def cancel(self):
         if self.canceled is False:
@@ -24,40 +25,46 @@ class Event(object):
 
     def get_id(self):
         return id(self)
+
+    def get_arrival_time(self):
+        return self.arrival_time
     
     def get_order(self):
         return self.ORDER
     
     def __eq__(self, other):
-        return self.__class__ == other.__class__
+        try:
+            return self.get_arrival_time() == other.get_arrival_time()
+        except TypeError:
+            raise TypeError(f"Can't compare {self} with {other}. {other} doesn't extend Event")
     
     def __lt__(self, other):
-        if other.__class__.__mro__[-2] == Event:
-            return self.get_order() < other.get_order()
-        else:
-            raise TypeError(f"can't compare {self} with {other}. {other} doesn't extend Event.")
+        try:
+            return (self.get_arrival_time(), self.get_order()) < (other.get_arrival_time(), other.get_order())
+        except TypeError:
+            raise TypeError(f"Can't compare {self} with {other}. {other} doesn't extend Event")
 
     def __repr__(self):
         raise NotImplementedError()
     
 class Arrival(Event):
     """An arrival event"""
-    def __init__(self, simulation):
-        super(Arrival,self).__init__(simulation)
+    def __init__(self, simulation, arrival_time):
+        super(Arrival,self).__init__(simulation, arrival_time)
     
 class Completion(Event):
     """A Completion Event"""
-    def __init__(self,simulation):
-        super(Completion,self).__init__(simulation)
+    def __init__(self,simulation, completion_time):
+        super(Completion,self).__init__(simulation, completion_time)
 
     def resolve(self):
         if self.is_canceled():
-            logging.debug(f'Event {self.get_id()} has already been completed.')
+            logging.debug(f'Event {self.get_id()} has already been completed. Simulation Time: {self.simulation.get_simulation_time()}')
             raise RuntimeError(f'Event {self.get_id()} has already been completed.')
 
 class TaskArrival(Arrival):
-    def __init__(self, simulation):
-        super(TaskArrival, self).__init__(simulation)
+    def __init__(self, simulation, arrival_time):
+        super(TaskArrival, self).__init__(simulation, arrival_time)
 
     def resolve(self):
         task = Task(self.simulation)
@@ -69,9 +76,13 @@ class TaskArrival(Arrival):
     
 class TaskCompletion(Completion):
     ORDER=1
-    def __init__(self, simulation, task):
-        super(TaskCompletion, self).__init__(simulation)
+    def __init__(self, simulation, task, completion_time, offset=0):
+        super(TaskCompletion, self).__init__(simulation, completion_time)
         self.task = task
+        self.interrenewal_time = completion_time - simulation.get_simulation_time() - offset
+
+    def get_interrenewal_time(self):
+        return self.interrenewal_time
 
     def resolve(self):
         try:
@@ -86,8 +97,8 @@ class TaskCompletion(Completion):
         return "TaskCompletion"
 
 class JobArrival(Arrival):
-    def __init__(self, simulation):
-        super(JobArrival, self).__init__(simulation)
+    def __init__(self, simulation, arrival_time):
+        super(JobArrival, self).__init__(simulation, arrival_time)
 
     def resolve(self):
         job = Job(self.simulation)
@@ -100,8 +111,8 @@ class JobArrival(Arrival):
 
 class JobCompletion(Completion):
     ORDER=2
-    def __init__(self,simulation, job):
-        super(JobCompletion, self).__init__(simulation)
+    def __init__(self,simulation, job, arrival_time):
+        super(JobCompletion, self).__init__(simulation, arrival_time)
         self.job = job
 
     def resolve(self):

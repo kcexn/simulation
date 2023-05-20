@@ -8,7 +8,7 @@ class Process(object):
     """Generate Events"""
     def __init__(self, simulation):
         self.simulation=simulation
-        self.rng = random.default_rng()
+        self.rng = random.default_rng(seed=1)
     
     def get_interrenewal_time(self):
         return self.rng.exponential(1)
@@ -25,13 +25,16 @@ class ArrivalProcess(Process):
 
     def get_task(self):
         self.arrival_time = self.arrival_time + self.get_interrenewal_time()
-        event = TaskArrival(self.simulation)
-        return (self.arrival_time, event)
+        event = TaskArrival(self.simulation, self.arrival_time)
+        return event
     
     def get_job(self):
         self.arrival_time = self.arrival_time + self.get_interrenewal_time()
-        event = JobArrival(self.simulation)
-        return (self.arrival_time, event)
+        event = JobArrival(self.simulation, self.arrival_time)
+        return event
+    
+    def get_interrenewal_time(self):
+        return self.rng.exponential(1/2)
 
     def get_arrival_time(self):
         return self.arrival_time
@@ -42,14 +45,17 @@ class CompletionProcess(Process):
     def __init__(self,simulation):
         super(CompletionProcess,self).__init__(simulation)
     
-    def get_task_completion(self,task):
-        completion_time = self.simulation.get_simulation_time() + self.get_interrenewal_time()
-        event = TaskCompletion(self.simulation, task)
-        return (completion_time, event)
+    def get_task_completion(self, task, offset=0, interrenewal_time=0):
+        if interrenewal_time > 0:
+            completion_time = self.simulation.get_simulation_time() + interrenewal_time + offset
+        else:
+            completion_time = self.simulation.get_simulation_time() + self.get_interrenewal_time() + offset
+        event = TaskCompletion(self.simulation, task, completion_time, offset=offset)
+        return event
     
     def get_job_completion(self,job):
         """Job completion only get scheduled once all tasks in a job are complete"""
-        return (self.simulation.get_simulation_time(), JobCompletion(self.simulation, job))
+        return JobCompletion(self.simulation, job, self.simulation.get_simulation_time())
 
 
 
