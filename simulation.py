@@ -6,30 +6,32 @@ from computer import Scheduler
 from work import Job
 class Simulation(object):
     INITIAL_TIME=0
-    NUM_JOBS=5000
+    NUM_JOBS=1000
     SIMULATION_TIME=100000
     def __init__(self):
         self.work = []
-        self.time = Simulation.INITIAL_TIME
+        self._time = Simulation.INITIAL_TIME
         self.event_queue = PriorityQueue()
         self.scheduler = Scheduler(self)
 
-    def get_simulation_time(self):
-        return self.time
+    @property
+    def time(self):
+        return self._time
     
-    def set_simulation_time(self, time):
-        self.time = time
+    @time.setter
+    def time(self, time):
+        self._time = time
 
     def run(self):
         logging.debug('running...')
         self.scheduler.generate_job_arrivals()
         while not self.event_queue.empty():
             event = self.event_queue.get()
-            if event.get_arrival_time() > Simulation.SIMULATION_TIME:
+            if event.arrival_time > Simulation.SIMULATION_TIME:
                 break
-            self.set_simulation_time(event.get_arrival_time())
+            self.time = event.arrival_time
             event.resolve()
-        logging.debug(f'total simulation time: {self.get_simulation_time()}')
+        logging.debug(f'total simulation time: {self.time}')
             
 
 if __name__ == "__main__":
@@ -38,8 +40,8 @@ if __name__ == "__main__":
     simulation.run()
     jobs = [work for work in simulation.work if work.__class__ == Job]
     sim_data = [
-        [job.get_start_time(), job.get_finish_time(), len(job.get_tasks()), job.get_finish_time()-job.get_start_time()] for 
-        job in jobs if job.get_start_time()>200
+        [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
+        job in jobs if job.start_time>300
     ]
     with open('sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')

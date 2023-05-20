@@ -7,40 +7,44 @@ class Event(object):
     ORDER = 0 # default constant for event order comparisons
     def __init__(self, simulation, arrival_time):
         self.simulation=simulation
-        self.canceled = False
-        self.arrival_time = arrival_time
+        self._canceled = False
+        self._arrival_time = arrival_time
     
-    def cancel(self):
-        if self.canceled is False:
-            self.canceled = True
-        else:
-            logging.debug('event {self.get_id()} is already canceled.')
-            raise ValueError(f'event {self.get_id()} is already canceled.')
+    @property
+    def canceled(self):
+        return self._canceled
 
-    def is_canceled(self):
-        return self.canceled
-
-    def resolve(self):
-        raise NotImplementedError()
-
-    def get_id(self):
+    @property
+    def id(self):
         return id(self)
 
-    def get_arrival_time(self):
-        return self.arrival_time
+    @property
+    def arrival_time(self):
+        return self._arrival_time 
     
-    def get_order(self):
+    @arrival_time.setter
+    def arrival_time(self, time):
+        self._arrival_time = time
+
+    @property
+    def order(self):
         return self.ORDER
+    
+    def cancel(self):
+        self._canceled = True
+    
+    def resolve(self):
+        raise NotImplementedError()
     
     def __eq__(self, other):
         try:
-            return self.get_arrival_time() == other.get_arrival_time()
+            return self.arrival_time == other.arrival_time
         except TypeError:
             raise TypeError(f"Can't compare {self} with {other}. {other} doesn't extend Event")
     
     def __lt__(self, other):
         try:
-            return (self.get_arrival_time(), self.get_order()) < (other.get_arrival_time(), other.get_order())
+            return (self.arrival_time, self.order) < (other.arrival_time, other.order)
         except TypeError:
             raise TypeError(f"Can't compare {self} with {other}. {other} doesn't extend Event")
 
@@ -58,9 +62,9 @@ class Completion(Event):
         super(Completion,self).__init__(simulation, completion_time)
 
     def resolve(self):
-        if self.is_canceled():
-            logging.debug(f'Event {self.get_id()} has already been completed. Simulation Time: {self.simulation.get_simulation_time()}')
-            raise RuntimeError(f'Event {self.get_id()} has already been completed.')
+        if self.canceled:
+            logging.debug(f'Event {self.id} has already been completed. Simulation Time: {self.simulation.time}')
+            raise RuntimeError(f'Event {self.id} has already been completed.')
 
 class TaskArrival(Arrival):
     def __init__(self, simulation, arrival_time):
@@ -68,7 +72,7 @@ class TaskArrival(Arrival):
 
     def resolve(self):
         task = Task(self.simulation)
-        logging.debug(f'start time: {task.get_start_time()}, task: {task.get_id()}')
+        logging.debug(f'start time: {task.start_time}, task: {task.id}')
         self.simulation.scheduler.schedule_task(task)
 
     def __repr__(self):
@@ -79,10 +83,11 @@ class TaskCompletion(Completion):
     def __init__(self, simulation, task, completion_time, offset=0):
         super(TaskCompletion, self).__init__(simulation, completion_time)
         self.task = task
-        self.interrenewal_time = completion_time - simulation.get_simulation_time() - offset
+        self._interrenewal_time = completion_time - simulation.time - offset
 
-    def get_interrenewal_time(self):
-        return self.interrenewal_time
+    @property
+    def interrenewal_time(self):
+        return self._interrenewal_time
 
     def resolve(self):
         try:
@@ -91,7 +96,7 @@ class TaskCompletion(Completion):
             pass
         else:
             self.simulation.scheduler.complete_task(self.task)
-            logging.debug(f'finish time: {self.task.get_finish_time()}, task: {self.task.get_id()}')
+            logging.debug(f'finish time: {self.task.finish_time}, task: {self.task.id}')
 
     def __repr__(self):
         return "TaskCompletion"
@@ -102,7 +107,7 @@ class JobArrival(Arrival):
 
     def resolve(self):
         job = Job(self.simulation)
-        logging.debug(f'start time: {job.get_start_time()}, job: {job.get_id()}')
+        logging.debug(f'start time: {job.start_time}, job: {job.id}')
         self.simulation.scheduler.schedule_job(job)
 
     def __repr__(self):
@@ -122,7 +127,7 @@ class JobCompletion(Completion):
             pass
         else:
             self.simulation.scheduler.complete_job(self.job)
-            logging.debug(f'finish time: {self.job.get_finish_time()}, job: {self.job.get_id()}')
+            logging.debug(f'finish time: {self.job.finish_time}, job: {self.job.id}')
 
     def __repr__(self):
         return "JobCompletion"
