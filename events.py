@@ -38,13 +38,13 @@ class Event(object):
     
     def __eq__(self, other):
         try:
-            return self.arrival_time == other.arrival_time
+            return self._arrival_time == other._arrival_time
         except TypeError:
             raise TypeError(f"Can't compare {self} with {other}. {other} doesn't extend Event")
     
     def __lt__(self, other):
         try:
-            return (self.arrival_time, self.order) < (other.arrival_time, other.order)
+            return self._arrival_time < other._arrival_time
         except TypeError:
             raise TypeError(f"Can't compare {self} with {other}. {other} doesn't extend Event")
 

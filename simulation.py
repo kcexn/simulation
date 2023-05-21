@@ -41,7 +41,7 @@ if __name__ == "__main__":
     jobs = [work for work in simulation.work if work.__class__ == Job]
     sim_data = [
         [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
-        job in jobs if job.start_time>300
+        job in jobs if job.start_time>100
     ]
     with open('sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')

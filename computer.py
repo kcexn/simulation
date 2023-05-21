@@ -1,4 +1,5 @@
 import logging
+from copy import copy
 from math import ceil
 from numpy import array_split, array
 
@@ -50,11 +51,13 @@ class Server(object):
                 if len(reschedule_tasks)>0:
                     events = sorted([self.tasks.pop(task) for task in reschedule_tasks])
                     for event,task in zip(events,reschedule_tasks):
-                        event.cancel()
                         if not task.job.is_finished:
+                            new_event = copy(event)
+                            new_event.arrival_time = event.arrival_time - time + self.simulation.time
                             self.simulation.event_queue.put(
-                                self.enqueue_task(task, interrenewal_time=event.interrenewal_time)
+                                new_event
                             )
+                        event.cancel()
 
     @property
     def id(self):
@@ -79,6 +82,15 @@ class Cluster(object):
 
 class Scheduler(object):
     POLICY = 'LatinSquare' # Currently Support RoundRobin, FullRepetition, LatinSquare
+    # LATIN_SQUARE = array([
+    #     [0,1],
+    #     [1,0]
+    # ])
+    # LATIN_SQUARE = array([
+    #     [0,1,2],
+    #     [1,2,0],
+    #     [2,0,1]
+    # ])
     LATIN_SQUARE = array([
         [0,1,2,3,4,5],
         [1,2,3,4,5,0],
