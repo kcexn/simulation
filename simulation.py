@@ -6,7 +6,7 @@ from computer import Scheduler
 from work import Job
 class Simulation(object):
     INITIAL_TIME=0
-    NUM_JOBS=1000
+    NUM_JOBS=6000
     SIMULATION_TIME=100000
     def __init__(self):
         self.work = []
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     jobs = [work for work in simulation.work if work.__class__ == Job]
     sim_data = [
         [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
-        job in jobs if job.start_time>100
+        job in jobs if job.start_time>0
     ]
     with open('sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')

@@ -164,6 +164,8 @@ class Scheduler(object):
             for i in range(len(batch)):
                 if Scheduler.POLICY == 'LatinSquare':
                     scheduled_order = [batch[Scheduler.LATIN_SQUARE[i][j]] for j in range(len(batch))]
+                elif Scheduler.POLICY == 'FullRepetition':
+                    scheduled_order = [batch[i]]*self.cluster.num_servers
                 else:
                     scheduled_order = batch
                 self.schedule_batch(scheduled_order)
