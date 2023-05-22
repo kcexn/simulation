@@ -162,13 +162,14 @@ class Scheduler(object):
         logging.debug(f'work batches to be scheduled are {work}')
         for batch in work:
             for i in range(len(batch)):
-                if Scheduler.POLICY == 'LatinSquare':
+                if Scheduler.POLICY == 'RoundRobin':
+                    self.schedule_batch(batch)
+                elif Scheduler.POLICY == 'LatinSquare':
                     scheduled_order = [batch[Scheduler.LATIN_SQUARE[i][j]] for j in range(len(batch))]
+                    self.schedule_batch(scheduled_order)
                 elif Scheduler.POLICY == 'FullRepetition':
-                    scheduled_order = [batch[i]]*self.cluster.num_servers
-                else:
-                    scheduled_order = batch
-                self.schedule_batch(scheduled_order)
+                    for _ in range(self.cluster.num_servers):
+                        self.schedule_batch(batch)
                 
 
     def complete_job(self, job):

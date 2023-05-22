@@ -6,7 +6,7 @@ from computer import Scheduler
 from work import Job
 class Simulation(object):
     INITIAL_TIME=0
-    NUM_JOBS=6000
+    NUM_JOBS=36000
     SIMULATION_TIME=100000
     def __init__(self):
         self.work = []

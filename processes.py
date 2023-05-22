@@ -6,9 +6,10 @@ from events import TaskArrival,TaskCompletion,JobArrival,JobCompletion
 
 class Process(object):
     """Generate Events"""
+    SEED_SEQUENCE = random.SeedSequence(12345)
     def __init__(self, simulation):
         self.simulation=simulation
-        self.rng = random.default_rng(seed=1)
+        self.rng = random.default_rng(self.SEED_SEQUENCE.spawn(1)[0])
 
     @property
     def interrenewal_times(self):
