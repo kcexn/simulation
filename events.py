@@ -1,6 +1,6 @@
 import logging
 
-from work import Task,Job
+from .work import *
 
 class Event(object):
     """Events are asynchronous simulation actions that are queued."""
@@ -133,3 +133,4 @@ class JobCompletion(Completion):
         return "JobCompletion"
 
 
+__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion']

@@ -1,8 +1,7 @@
 import logging
 from numpy import random
 
-from events import TaskArrival,TaskCompletion,JobArrival,JobCompletion
-
+from .events import *
 
 class Process(object):
     """Generate Events"""
@@ -64,3 +63,4 @@ class CompletionProcess(Process):
 
 
 
+__all__ = ['ArrivalProcess', 'CompletionProcess']

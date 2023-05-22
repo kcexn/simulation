@@ -3,8 +3,7 @@ from copy import copy
 from math import ceil
 from numpy import array_split, array
 
-from processes import CompletionProcess, ArrivalProcess
-
+from .processes import *
 
 class Server(object):
     """Class to keep track of server status"""
@@ -179,3 +178,5 @@ class Scheduler(object):
             logging.debug(f'setting job finishing time to {time} for job: {job.id}')
         except ValueError:
             pass
+
+__all__ = ['Server','Cluster','Scheduler']

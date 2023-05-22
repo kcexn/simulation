@@ -1,6 +1,5 @@
 import logging
 
-
 class Work(object):
     def __init__(self,simulation):
         self.simulation = simulation
@@ -73,3 +72,5 @@ class Job(Work):
     @property
     def tasks(self):
         return self._tasks
+
+__all__ = ['Task', 'Job']

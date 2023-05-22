@@ -2,8 +2,9 @@ import logging
 from queue import PriorityQueue
 import csv
 
-from computer import Scheduler
-from work import Job
+from .computer import Scheduler
+from .work import Job
+
 class Simulation(object):
     INITIAL_TIME=0
     NUM_JOBS=36000
@@ -32,6 +33,9 @@ class Simulation(object):
             self.time = event.arrival_time
             event.resolve()
         logging.debug(f'total simulation time: {self.time}')
+
+
+__all__ = ['Simulation']
             
 
 if __name__ == "__main__":
