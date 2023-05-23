@@ -1,6 +1,9 @@
 import logging
 
-from .work import *
+if not __package__:
+    from work import *
+else:
+    from .work import *
 
 class Event(object):
     """Events are asynchronous simulation actions that are queued."""

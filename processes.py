@@ -1,7 +1,10 @@
 import logging
 from numpy import random
 
-from .events import *
+if not __package__:
+    from events import *
+else:
+    from .events import *
 
 class Process(object):
     """Generate Events"""

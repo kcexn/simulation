@@ -3,8 +3,10 @@ from copy import copy
 from math import ceil
 from numpy import array_split, array
 
-from .processes import *
-
+if not __package__:
+    from processes import *
+else:
+    from .processes import *
 class Server(object):
     """Class to keep track of server status"""
     def __init__(self, simulation):

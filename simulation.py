@@ -1,13 +1,17 @@
 import logging
-from queue import PriorityQueue
 import csv
+from queue import PriorityQueue
 
-from .computer import Scheduler
-from .work import Job
+if not __package__:
+    from work import Job
+    from computer import Scheduler
+else:
+    from .work import Job
+    from .computer import Scheduler
 
 class Simulation(object):
     INITIAL_TIME=0
-    NUM_JOBS=36000
+    NUM_JOBS=1000
     SIMULATION_TIME=100000
     def __init__(self):
         self.work = []
@@ -36,9 +40,8 @@ class Simulation(object):
 
 
 __all__ = ['Simulation']
-            
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     logging.basicConfig(filename='logging.log', filemode='w', level='INFO')
     simulation = Simulation()
     simulation.run()
