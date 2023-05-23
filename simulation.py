@@ -5,15 +5,23 @@ from queue import PriorityQueue
 if not __package__:
     from work import Job
     from computer import Scheduler
+    import configure
 else:
     from .work import Job
     from .computer import Scheduler
+    from . import configure
 
 class Simulation(object):
+    CONFIGURATION = configure.configuration()
     INITIAL_TIME=0
-    NUM_JOBS=1000
-    SIMULATION_TIME=100000
-    def __init__(self):
+    NUM_JOBS=int(CONFIGURATION['Simulation']['NUM_JOBS'])
+    SIMULATION_TIME=float(CONFIGURATION['Simulation']['SIMULATION_TIME'])
+    def __init__(self, filename=None):
+        if filename is not None:
+            self.CONFIGURATION = configure.configuration(filename=filename)
+            self.NUM_JOBS=int(self.CONFIGURATION['Simulation']['NUM_JOBS'])
+            self.SIMULATION_TIME=float(self.CONFIGURATION['Simulation']['SIMULATION_TIME'])
+        logging.debug(f'NUM_JOBS: {self.NUM_JOBS}, SIMULATION_TIME: {self.SIMULATION_TIME}')
         self.work = []
         self._time = Simulation.INITIAL_TIME
         self.event_queue = PriorityQueue()

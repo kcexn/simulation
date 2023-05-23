@@ -63,11 +63,13 @@ class Task(Work):
             job.finish_time = time
 
 class Job(Work):
-    NUM_TASKS = 6
+    NUM_TASKS = 1
     """A Collection of Tasks"""
     def __init__(self,simulation):
         super(Job, self).__init__(simulation)
-        self._tasks = [Task(simulation,job=self) for _ in range(Job.NUM_TASKS)]
+        self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
+        logging.debug(f'NUM_TASKS: {self.NUM_TASKS}')
+        self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
 
     @property
     def tasks(self):

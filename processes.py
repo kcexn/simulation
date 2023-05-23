@@ -26,7 +26,10 @@ class ArrivalProcess(Process):
     INITIAL_TIME=0
     def __init__(self,simulation):
         super(ArrivalProcess, self).__init__(simulation)
-        self._arrival_time = ArrivalProcess.INITIAL_TIME
+        self._arrival_time = float(self.simulation.CONFIGURATION['Processes.Arrival']['INITIAL_TIME'])
+        self._SHAPE = float(self.simulation.CONFIGURATION['Processes.Arrival']['SHAPE'])
+        self._SCALE = float(self.simulation.CONFIGURATION['Processes.Arrival']['SCALE'])
+        logging.debug(f'Initial Arrival Time: {self._arrival_time}, shape: {self._SHAPE}, scale: {self._SCALE}')
     
     @property
     def jobs(self):
@@ -36,7 +39,8 @@ class ArrivalProcess(Process):
     
     @property
     def interrenewal_times(self):
-        yield self.rng.gamma(6.0,scale=1/6.0)
+        while True:
+            yield self.rng.gamma(self._SHAPE,scale=self._SCALE)
 
     @property
     def arrival_time(self):

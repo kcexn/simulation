@@ -5,8 +5,10 @@ from numpy import array_split, array
 
 if not __package__:
     from processes import *
+    from configure import latin_square
 else:
     from .processes import *
+    from .configure import latin_square
 class Server(object):
     """Class to keep track of server status"""
     def __init__(self, simulation):
@@ -69,7 +71,9 @@ class Cluster(object):
     """A Collection of Servers"""
     NUM_SERVERS = 6
     def __init__(self,simulation):
-        self._servers = [Server(simulation) for _ in range(Cluster.NUM_SERVERS)]
+        logging.debug(f'NUM_SERVERS: {self.NUM_SERVERS}')
+        self.NUM_SERVERS = int(simulation.CONFIGURATION['Computer.Cluster']['NUM_SERVERS'])
+        self._servers = [Server(simulation) for _ in range(self.NUM_SERVERS)]
         logging.debug(f'servers have ids: {[server.id for server in self.servers]}')
 
     @property
@@ -92,16 +96,12 @@ class Scheduler(object):
     #     [1,2,0],
     #     [2,0,1]
     # ])
-    LATIN_SQUARE = array([
-        [0,1,2,3,4,5],
-        [1,2,3,4,5,0],
-        [2,3,4,5,0,1],
-        [3,4,5,0,1,2],
-        [4,5,0,1,2,3],
-        [5,0,1,2,3,4]
-    ])
+    LATIN_SQUARE = array(latin_square(6))
     def __init__(self, simulation):
         self.simulation = simulation
+        self.POLICY = simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
+        self.LATIN_SQUARE = array(latin_square(int(simulation.CONFIGURATION['Computer.Scheduler']['LATIN_SQUARE_ORDER'])))
+        logging.debug(f'Scheduling Policy: {self.POLICY}, Latin Square: {self.LATIN_SQUARE}')
         self.cluster = Cluster(simulation)
         self.arrival_process = ArrivalProcess(simulation)
         self.completion_process = CompletionProcess(simulation)
@@ -156,8 +156,8 @@ class Scheduler(object):
         elif Scheduler.POLICY == 'FullRepetition':
             batch_size = len(tasks)
         elif Scheduler.POLICY == 'LatinSquare':
-            logging.debug(f'Latin Square order is {Scheduler.LATIN_SQUARE.shape[0]}')
-            batch_size = Scheduler.LATIN_SQUARE.shape[0]
+            logging.debug(f'Latin Square order is {self.LATIN_SQUARE.shape[0]}')
+            batch_size = self.LATIN_SQUARE.shape[0]
 
         work = [el.tolist() for el in array_split(tasks, ceil(len(tasks)/batch_size))]
         logging.debug(f'work batches to be scheduled are {work}')
@@ -166,7 +166,7 @@ class Scheduler(object):
                 if Scheduler.POLICY == 'RoundRobin':
                     self.schedule_batch(batch)
                 elif Scheduler.POLICY == 'LatinSquare':
-                    scheduled_order = [batch[Scheduler.LATIN_SQUARE[i][j]] for j in range(len(batch))]
+                    scheduled_order = [batch[self.LATIN_SQUARE[i][j]] for j in range(len(batch))]
                     self.schedule_batch(scheduled_order)
                 elif Scheduler.POLICY == 'FullRepetition':
                     for _ in range(self.cluster.num_servers):
