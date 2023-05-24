@@ -151,11 +151,11 @@ class Scheduler(object):
         self.simulation.work.append(job)
         tasks = job.tasks
 
-        if Scheduler.POLICY == 'RoundRobin':
+        if self.POLICY == 'RoundRobin':
             batch_size = 1
-        elif Scheduler.POLICY == 'FullRepetition':
+        elif self.POLICY == 'FullRepetition':
             batch_size = len(tasks)
-        elif Scheduler.POLICY == 'LatinSquare':
+        elif self.POLICY == 'LatinSquare':
             logging.debug(f'Latin Square order is {self.LATIN_SQUARE.shape[0]}')
             batch_size = self.LATIN_SQUARE.shape[0]
 
@@ -163,12 +163,12 @@ class Scheduler(object):
         logging.debug(f'work batches to be scheduled are {work}')
         for batch in work:
             for i in range(len(batch)):
-                if Scheduler.POLICY == 'RoundRobin':
+                if self.POLICY == 'RoundRobin':
                     self.schedule_batch(batch)
-                elif Scheduler.POLICY == 'LatinSquare':
+                elif self.POLICY == 'LatinSquare':
                     scheduled_order = [batch[self.LATIN_SQUARE[i][j]] for j in range(len(batch))]
                     self.schedule_batch(scheduled_order)
-                elif Scheduler.POLICY == 'FullRepetition':
+                elif self.POLICY == 'FullRepetition':
                     for _ in range(self.cluster.num_servers):
                         self.schedule_batch(batch)
                 
