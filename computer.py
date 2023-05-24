@@ -82,7 +82,7 @@ class Cluster(object):
     
     @property
     def num_servers(self):
-        return Cluster.NUM_SERVERS
+        return self.NUM_SERVERS
 
 
 class Scheduler(object):
