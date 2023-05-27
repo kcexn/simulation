@@ -18,6 +18,10 @@ class Work(object):
     def start_time(self):
         return self._start_time
     
+    @start_time.setter
+    def start_time(self, time):
+        self._start_time = time
+    
     @property
     def finish_time(self):
         if self._finish_time is not None:
@@ -48,6 +52,10 @@ class Task(Work):
             return self._job
         else:
             raise AttributeError(f'task {self.id} does not belong to any jobs.')
+    
+    @job.setter
+    def job(self, job):
+        self._job = job
         
     @property
     def finish_time(self):
@@ -65,11 +73,19 @@ class Task(Work):
 class Job(Work):
     NUM_TASKS = 1
     """A Collection of Tasks"""
-    def __init__(self,simulation):
+    def __init__(self,simulation, tasks=[]):
         super(Job, self).__init__(simulation)
         self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
         logging.debug(f'NUM_TASKS: {self.NUM_TASKS}')
-        self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
+        if len(tasks) == 0:
+            self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
+        elif len(tasks) == self.NUM_TASKS:
+            self._tasks = tasks
+            for task in self._tasks:
+                task.job = self
+
+        else:
+            raise TypeError(f'A list of {len(tasks)} tasks was passed to the {self}, however, {self.NUM_TASKS} was expected.')
 
     @property
     def tasks(self):

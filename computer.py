@@ -99,6 +99,8 @@ class Scheduler(object):
     LATIN_SQUARE = array(latin_square(6))
     def __init__(self, simulation):
         self.simulation = simulation
+        self.unassigned_tasks = []
+        self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
         self.POLICY = simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
         self.LATIN_SQUARE = array(latin_square(int(simulation.CONFIGURATION['Computer.Scheduler']['LATIN_SQUARE_ORDER'])))
         logging.debug(f'Scheduling Policy: {self.POLICY}, Latin Square: {self.LATIN_SQUARE}')
@@ -107,7 +109,7 @@ class Scheduler(object):
         self.completion_process = CompletionProcess(simulation)
         self.counter = 0
 
-    def generate_job_arrivals(self):
+    def generate_arrivals(self):
         for idx,job in enumerate(self.arrival_process.jobs):
             if idx < self.simulation.NUM_JOBS:
                 self.simulation.event_queue.put(job)
@@ -117,15 +119,27 @@ class Scheduler(object):
     def schedule_job_completion(self,job):
         self.simulation.event_queue.put(self.completion_process.get_job_completion(job))
 
-    def schedule_task(self, task, server):
+    def schedule_task(self, task, server=None):
         """Enqueue the task and return a task completion time"""
         try:
-            task.job
+            job = task.job
         except AttributeError:
-            self.simulation.work.append(task)
-        self.simulation.event_queue.put(
-            server.enqueue_task(task)
-        )
+            # If task is not assigned to a job, batch this task with other unassigned tasks, and schedule a job arrival.
+            self.unassigned_tasks.append(task)
+            if len(self.unassigned_tasks) == self.NUM_TASKS:
+                self.simulation.event_queue.put(
+                    self.arrival_process.job(self.unassigned_tasks)
+                )
+                self.unassigned_tasks = []
+        else:
+            if not server:
+                # If no server is provided assume the current one.
+                server = self.cluster.servers[self.counter]
+                server.enqueue_task(task)
+            else:
+                self.simulation.event_queue.put(
+                    server.enqueue_task(task)
+                )
 
     def schedule_batch(self,batch):
         """Enqueue batches of tasks round robin scheduling"""

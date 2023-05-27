@@ -4,16 +4,42 @@
 After configuring the simulation parameters, the simulation can be run simply 
 as a python script:
 
-`
-    python simulation.py
-`
+`python simulation.py`
 ## Configuration:
+Simulation Parameters are kept in configuration.ini and contain the parameters:
+    [Simulation]
+    NUM_JOBS = 5000
+    SIMULATION_TIME = 36000.0
+
+    [Computer]
+
+    [Computer.Cluster]
+    NUM_SERVERS = 6
+
+    [Computer.Scheduler]
+    POLICY = LatinSquare
+    LATIN_SQUARE_ORDER = 6
+
+    [Processes]
+
+    [Processes.Arrival]
+    INITIAL_TIME = 0.0
+    SCALE = 0.167
+
+    [Work]
+
+    [Work.Job]
+    NUM_TASKS=6
+
+
 ### Configure Jobs and Tasks
 - A task is a unit of work that is assigned to a server by the scheduler.
 - A job is a collection of tasks.
 
 The number of tasks that belong to a job is defined by `NUM_TASKS` 
 in `work.Job`.
+
+`NUM_TASKS` also controls the rate at which jobs will arrive (the shape parameter of the Erlang distribution).
 ### Configure the Computing Cluster
 - A server is responsible for the servicing of tasks.
 - Each server has a FIFO queue, and services tasks in the order that 
@@ -21,7 +47,7 @@ the scheduler gives them to the server.
 - A cluster is a collection of servers.
 
 The number of servers in the cluster is defined by `NUM_SERVERS` in 
-`computer.Cluster`.
+`Computer.Cluster`.
 
 There are three currently implemented scheduling policies:
 - `RoundRobin`: Assign tasks round robin to all servers.
@@ -33,18 +59,16 @@ the latin square. Examples for latin squares of order 2, 3, and 6 are given.
 Higher orders can be constructed as the addition table of the finite group 
 with `n` elements, where `n` is the order of the latin square.
 
-The scheduling policy is defined by `POLICY` in `computer.Scheduler`.
+The scheduling policy is defined by `POLICY` in `Computer.Scheduler`.
 
 ### Configure the Arrival and Completion Processes:
 - The arrival process controls the rate at which jobs arrive.
 - The completion process controls the rate at which servers complete tasks.
 
-The arrival process yields interarrival times as a gamma random variable 
-with a shape-scale parameterization in 
-`processes.ArrivalProcess.interrenewal_times`
+The arrival process yields interarrival times as an Erlang random variable 
+with a `SCALE` parameter in `Process.Arrivals`.
 
-The completion process yields completion times as an exponential random variable 
-with a scale parameterization in `processes.Process.interrenewal_times`.
+The completion process yields completion times as a standard exponential.
 
 ### Configure the Simulation:
 The simulation is controlled by two parameters:
@@ -56,6 +80,3 @@ The simulation is controlled by two parameters:
 will terminate if either:
 - The event queue is empty
 - the simulated time exceeds `SIMULATION_TIME`. 
-
-
-

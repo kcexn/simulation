@@ -70,6 +70,7 @@ class Completion(Event):
             raise RuntimeError(f'Event {self.id} has already been completed.')
 
 class TaskArrival(Arrival):
+    """Task Arrivals Need to be Assigned to Jobs"""
     def __init__(self, simulation, arrival_time):
         super(TaskArrival, self).__init__(simulation, arrival_time)
 
@@ -105,11 +106,12 @@ class TaskCompletion(Completion):
         return "TaskCompletion"
 
 class JobArrival(Arrival):
-    def __init__(self, simulation, arrival_time):
+    def __init__(self, simulation, arrival_time, tasks=[]):
         super(JobArrival, self).__init__(simulation, arrival_time)
+        self.tasks=tasks
 
     def resolve(self):
-        job = Job(self.simulation)
+        job = Job(self.simulation,tasks=self.tasks)
         logging.debug(f'start time: {job.start_time}, job: {job.id}')
         self.simulation.scheduler.schedule_job(job)
 

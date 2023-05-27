@@ -37,10 +37,10 @@ class Simulation(object):
 
     def run(self):
         logging.debug('running...')
-        self.scheduler.generate_job_arrivals()
+        self.scheduler.generate_arrivals()
         while not self.event_queue.empty():
             event = self.event_queue.get()
-            if event.arrival_time > Simulation.SIMULATION_TIME:
+            if event.arrival_time > self.SIMULATION_TIME:
                 break
             self.time = event.arrival_time
             event.resolve()
@@ -50,13 +50,13 @@ class Simulation(object):
 __all__ = ['Simulation']
 
 if __name__ == '__main__':
-    logging.basicConfig(filename='logging.log', filemode='w', level='INFO')
+    logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
     simulation = Simulation()
     simulation.run()
-    jobs = [work for work in simulation.work if work.__class__ == Job]
+    jobs = [job for job in simulation.work if job.__class__ == Job and job.start_time>500]
     sim_data = [
         [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
-        job in jobs if job.start_time>0
+        job in jobs
     ]
     with open('sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')
@@ -66,5 +66,10 @@ if __name__ == '__main__':
     start_time = sim_data[0][0]
     finish_time = sim_data[-1][1]
     total_time = finish_time - start_time
+    avg_task_latencies = [
+        sum([task.finish_time - task.start_time for task in job.tasks])/int(simulation.CONFIGURATION["Work.Job"]["NUM_TASKS"]) for job in jobs
+    ]
+
     print(f'Average Job Latency: {sum(latencies)/Simulation.NUM_JOBS}')
+    print(f'Average Average Task Latency: {sum(avg_task_latencies)/simulation.NUM_JOBS}')
     print(f'Average time per job: {total_time/Simulation.NUM_JOBS}')

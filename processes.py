@@ -3,8 +3,10 @@ from numpy import random
 
 if not __package__:
     from events import *
+    from work import *
 else:
     from .events import *
+    from .work import *
 
 class Process(object):
     """Generate Events"""
@@ -15,7 +17,8 @@ class Process(object):
 
     @property
     def interrenewal_times(self):
-        yield self.rng.exponential(1)
+        while True:
+            yield self.rng.exponential(1)
     
     @property
     def id(self):
@@ -26,21 +29,36 @@ class ArrivalProcess(Process):
     INITIAL_TIME=0
     def __init__(self,simulation):
         super(ArrivalProcess, self).__init__(simulation)
+        self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
         self._arrival_time = float(self.simulation.CONFIGURATION['Processes.Arrival']['INITIAL_TIME'])
-        self._SHAPE = float(self.simulation.CONFIGURATION['Processes.Arrival']['SHAPE'])
         self._SCALE = float(self.simulation.CONFIGURATION['Processes.Arrival']['SCALE'])
-        logging.debug(f'Initial Arrival Time: {self._arrival_time}, shape: {self._SHAPE}, scale: {self._SCALE}')
+        logging.debug(f'Initial Arrival Time: {self._arrival_time}, num_tasks: {self.NUM_TASKS}, scale: {self._SCALE}')
+
+    def job(self, tasks=[]):
+        return JobArrival(self.simulation, self.simulation.time, tasks)
     
     @property
     def jobs(self):
         while True:
+            tasks = []
+            for _ in range(self.NUM_TASKS):
+                self._arrival_time = self._arrival_time + next(self.interrenewal_times)
+                task = Task(self.simulation)
+                task.start_time = self._arrival_time
+                tasks.append(task)
+            yield JobArrival(self.simulation, self._arrival_time, tasks=tasks)
+ 
+
+    @property
+    def tasks(self):
+        while True:
             self._arrival_time = self._arrival_time + next(self.interrenewal_times)
-            yield JobArrival(self.simulation, self._arrival_time)
-    
+            yield TaskArrival(self.simulation, self._arrival_time)
+
     @property
     def interrenewal_times(self):
         while True:
-            yield self.rng.gamma(self._SHAPE,scale=self._SCALE)
+            yield self.rng.exponential(self._SCALE)
 
     @property
     def arrival_time(self):
