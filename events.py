@@ -53,6 +53,24 @@ class Event(object):
 
     def __repr__(self):
         raise NotImplementedError()
+
+class SimulationEvent(Event):
+    """Generic Simulation Event The callback should return an event."""
+    def __init__(self, simulation, arrival_time, callback, *args):
+        super(SimulationEvent, self).__init__(simulation, arrival_time)
+        self._callback = callback
+        self._args = args
+    
+    def resolve(self):
+        event = self._callback(*self._args)
+        if isinstance(event, Event):
+            self.simulation.event_queue.put(
+                event
+            )
+
+class NetworkEvent(SimulationEvent):
+    def __init__(self, simulation, arrival_time, callback, *args):
+        super(NetworkEvent, self).__init__(simulation,arrival_time,callback,*args)
     
 class Arrival(Event):
     """An arrival event"""
@@ -100,7 +118,7 @@ class TaskCompletion(Completion):
             pass
         else:
             self.simulation.scheduler.complete_task(self.task)
-            logging.debug(f'finish time: {self.task.finish_time}, task: {self.task.id}')
+            # self.simulation.scheduler.complete_task(self.task)
 
     def __repr__(self):
         return "TaskCompletion"
@@ -136,6 +154,12 @@ class JobCompletion(Completion):
 
     def __repr__(self):
         return "JobCompletion"
+    
 
+class NetworkDelay(NetworkEvent):
+    """e2e Network Delay"""
+    def __init__(self,simulation,arrival_time, callback,*args):
+        super(NetworkDelay,self).__init__(simulation,arrival_time,callback,*args)
+        logging.debug(f'Network Communication Delay Event for method: {callback}, arrival time: {arrival_time}')
 
-__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion']
+__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion', 'NetworkDelay']

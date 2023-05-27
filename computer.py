@@ -11,8 +11,9 @@ else:
     from .configure import latin_square
 class Server(object):
     """Class to keep track of server status"""
-    def __init__(self, simulation):
+    def __init__(self, simulation, network):
         self.simulation = simulation
+        self.network = network
         self.tasks = {}
         self.completion_process = CompletionProcess(simulation)
 
@@ -20,7 +21,7 @@ class Server(object):
     def busy_until(self):
         events = [self.tasks[task] for task in list(self.tasks)]
         if len(events) == 0:
-            logging.debug(f'server: {self.id} is busy until: {self.simulation.time}')
+            logging.debug(f'server: {self.id} is currently idle.')
             return self.simulation.time
         else:
             max_event = max(events)
@@ -30,37 +31,49 @@ class Server(object):
     def enqueue_task(self, task, interrenewal_time=0):
         offset = self.busy_until - self.simulation.time
         event = self.completion_process.get_task_completion(task, offset=offset, interrenewal_time=interrenewal_time)
-        logging.debug(f'completion time for task {task.id} is {event.arrival_time}, executing on server {self.id}')
         self.tasks[task] = event
-        return event
+        def cb(time=self.simulation.time, event=event, simulation=self.simulation, task=task, server=self):
+            event.arrival_time = event.arrival_time - time + simulation.time
+            logging.debug(f'completion time for task, {task.id}, is {event.arrival_time}, executing on server: {server.id}')
+            return event
+        return self.network.delay(
+            cb
+        )
 
 
     def complete_task(self, task):
         """Task completion is idempotent"""
         try:
             event = self.tasks.pop(task)
+            logging.debug(f'server: {self.id}, completing task: {task.id}, at time: {self.simulation.time}')
         except KeyError:
-            pass
+            policy = self.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
+            if policy == 'FullRepetition' or policy == 'LatinSquare':
+                logging.debug(f'task: {task.id} is not in the queue of server: {self.id}. Simulation time: {self.simulation.time}')
         else:
             time = event.arrival_time
-            if time > self.simulation.time:
-                event.cancel()
-            if task.job.is_finished:
+            event.cancel()
+            if task.job.is_finished and time > self.simulation.time:
                 # Preempt the job, and move all subsequent tasks up in the queue.
                 reschedule_tasks = [
                     task for task in list(self.tasks) if self.tasks[task].arrival_time > time
                 ]
-                logging.debug(f'reschedule tasks: {reschedule_tasks} on server: {self.id}.')
                 if len(reschedule_tasks)>0:
+                    logging.debug(f'reschedule tasks: {reschedule_tasks} on server: {self.id}.')
                     events = sorted([self.tasks.pop(task) for task in reschedule_tasks])
                     for event,task in zip(events,reschedule_tasks):
                         if not task.job.is_finished:
                             new_event = copy(event)
                             new_event.arrival_time = event.arrival_time - time + self.simulation.time
+                            logging.debug(f'task {task.id} rescheduled to complete on server: {self.id} at time: {new_event.arrival_time}')
                             self.simulation.event_queue.put(
                                 new_event
                             )
+                            self.tasks[task] = new_event
+                        else:
+                            logging.debug(f'task {task.id} is already associated to a job that is complete, at time:{event.arrival_time}')
                         event.cancel()
+
 
     @property
     def id(self):
@@ -71,9 +84,10 @@ class Cluster(object):
     """A Collection of Servers"""
     NUM_SERVERS = 6
     def __init__(self,simulation):
-        logging.debug(f'NUM_SERVERS: {self.NUM_SERVERS}')
+        self.network = Network(simulation)
         self.NUM_SERVERS = int(simulation.CONFIGURATION['Computer.Cluster']['NUM_SERVERS'])
-        self._servers = [Server(simulation) for _ in range(self.NUM_SERVERS)]
+        logging.debug(f'NUM_SERVERS: {self.NUM_SERVERS}')
+        self._servers = [Server(simulation, self.network) for _ in range(self.NUM_SERVERS)]
         logging.debug(f'servers have ids: {[server.id for server in self.servers]}')
 
     @property
@@ -83,6 +97,17 @@ class Cluster(object):
     @property
     def num_servers(self):
         return self.NUM_SERVERS
+    
+
+class Network(object):
+    """A Collection of Network Parameters and Functions"""
+    def __init__(self,simulation):
+        logging.debug(f'Initialize Network.')
+        self.simulation = simulation
+        self.delay_process = NetworkDelayProcess(simulation)
+
+    def delay(self, callback, *args):
+        return self.delay_process.delay(callback, *args)
 
 
 class Scheduler(object):
@@ -135,10 +160,16 @@ class Scheduler(object):
             if not server:
                 # If no server is provided assume the current one.
                 server = self.cluster.servers[self.counter]
-                server.enqueue_task(task)
+                self.simulation.event_queue.put(
+                    self.cluster.network.delay(
+                        server.enqueue_task, task
+                    )
+                )
             else:
                 self.simulation.event_queue.put(
-                    server.enqueue_task(task)
+                    self.cluster.network.delay(
+                        server.enqueue_task, task
+                    )
                 )
 
     def schedule_batch(self,batch):
@@ -156,9 +187,14 @@ class Scheduler(object):
             pass
         except ValueError:
             pass
-        for server in self.cluster.servers:
-            server.complete_task(task)
-
+        else:
+            logging.debug(f'finish time: {task.finish_time}, task: {task.id}')
+            for server in self.cluster.servers:
+                self.simulation.event_queue.put(
+                    self.cluster.network.delay(
+                        server.complete_task,task
+                    )
+                )
 
     def schedule_job(self, job):
         """Schedule the tasks in the job"""

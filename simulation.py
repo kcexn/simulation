@@ -53,7 +53,7 @@ if __name__ == '__main__':
     logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
     simulation = Simulation()
     simulation.run()
-    jobs = [job for job in simulation.work if job.__class__ == Job and job.start_time>500]
+    jobs = [job for job in simulation.work if job.__class__ == Job and job.start_time>0]
     sim_data = [
         [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
         job in jobs

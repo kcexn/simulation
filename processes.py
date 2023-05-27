@@ -24,6 +24,22 @@ class Process(object):
     def id(self):
         return id(self)
     
+class NetworkDelayProcess(Process):
+    """Generate Network Delays"""
+    def __init__(self, simulation):
+        super(NetworkDelayProcess,self).__init__(simulation)
+        self.location = float(simulation.CONFIGURATION['Computer.Network']['MEAN_DELAY'])
+        self.scale = float(simulation.CONFIGURATION['Computer.Network']['DELAY_STD'])
+
+    @property
+    def interrenewal_times(self):
+        while True:
+            yield self.rng.normal(loc=self.location,scale=self.scale)
+
+    def delay(self, callback, *args):
+        arrival_time = self.simulation.time + next(self.interrenewal_times)
+        return NetworkDelay(self.simulation, arrival_time, callback, *args)
+    
 class ArrivalProcess(Process):
     """Generates Arrival Events"""
     INITIAL_TIME=0
@@ -88,4 +104,4 @@ class CompletionProcess(Process):
 
 
 
-__all__ = ['ArrivalProcess', 'CompletionProcess']
+__all__ = ['ArrivalProcess', 'CompletionProcess', 'NetworkDelayProcess']

@@ -63,7 +63,11 @@ class Task(Work):
     
     @finish_time.setter
     def finish_time(self,time):
-        self._finish_time = time
+        if self._finish_time is None:
+            self._finish_time = time
+        else:
+            logging.debug(f'task: {self.id}, has already finished, and can not be updated twice, simulation time: {self.simulation.time}')
+            raise ValueError(f'Finish time can only be written to once.')
         tasks = [task for task in self.job.tasks]
         if False not in (task.is_finished for task in tasks):
             job = self._job
@@ -83,7 +87,6 @@ class Job(Work):
             self._tasks = tasks
             for task in self._tasks:
                 task.job = self
-
         else:
             raise TypeError(f'A list of {len(tasks)} tasks was passed to the {self}, however, {self.NUM_TASKS} was expected.')
 
