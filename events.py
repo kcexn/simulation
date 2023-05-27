@@ -117,7 +117,11 @@ class TaskCompletion(Completion):
         except RuntimeError:
             pass
         else:
-            self.simulation.scheduler.complete_task(self.task)
+            self.simulation.event_queue.put(
+                self.simulation.scheduler.cluster.network.delay(
+                    self.simulation.scheduler.complete_task, self.task
+                )
+            )
             # self.simulation.scheduler.complete_task(self.task)
 
     def __repr__(self):
@@ -160,6 +164,6 @@ class NetworkDelay(NetworkEvent):
     """e2e Network Delay"""
     def __init__(self,simulation,arrival_time, callback,*args):
         super(NetworkDelay,self).__init__(simulation,arrival_time,callback,*args)
-        logging.debug(f'Network Communication Delay Event for method: {callback}, arrival time: {arrival_time}')
+        logging.debug(f'Network Communication Delay Event for method: {callback}, arrival time: {arrival_time}, simulation time: {self.simulation.time}')
 
 __all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion', 'NetworkDelay']

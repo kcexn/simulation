@@ -21,31 +21,27 @@ class Server(object):
     def busy_until(self):
         events = [self.tasks[task] for task in list(self.tasks)]
         if len(events) == 0:
-            logging.debug(f'server: {self.id} is currently idle.')
+            logging.debug(f'server: {self.id} is currently idle. Simulation Time: {self.simulation.time}')
             return self.simulation.time
         else:
             max_event = max(events)
-            logging.debug(f'server: {self.id} is busy until: {max_event.arrival_time}')
+            logging.debug(f'server: {self.id} is busy until: {max_event.arrival_time}, simulation time: {self.simulation.time}')
             return max_event.arrival_time
     
     def enqueue_task(self, task, interrenewal_time=0):
         offset = self.busy_until - self.simulation.time
         event = self.completion_process.get_task_completion(task, offset=offset, interrenewal_time=interrenewal_time)
         self.tasks[task] = event
-        def cb(time=self.simulation.time, event=event, simulation=self.simulation, task=task, server=self):
-            event.arrival_time = event.arrival_time - time + simulation.time
-            logging.debug(f'completion time for task, {task.id}, is {event.arrival_time}, executing on server: {server.id}')
-            return event
-        return self.network.delay(
-            cb
-        )
+        logging.debug(f'completion time for task, {task.id}, is {event.arrival_time}, executing on server: {self.id}')
+        return event
 
 
     def complete_task(self, task):
         """Task completion is idempotent"""
         try:
+            logging.debug(f'server: {self.id}, checking if task: {task.id} is in the queue. Simulation Time: {self.simulation.time}')
             event = self.tasks.pop(task)
-            logging.debug(f'server: {self.id}, completing task: {task.id}, at time: {self.simulation.time}')
+            logging.debug(f'server: {self.id}, clearing task: {task.id} from queue, at time: {self.simulation.time}')
         except KeyError:
             policy = self.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
             if policy == 'FullRepetition' or policy == 'LatinSquare':
@@ -188,7 +184,7 @@ class Scheduler(object):
         except ValueError:
             pass
         else:
-            logging.debug(f'finish time: {task.finish_time}, task: {task.id}')
+            logging.debug(f'finish time: {task.finish_time}, for task: {task.id}')
             for server in self.cluster.servers:
                 self.simulation.event_queue.put(
                     self.cluster.network.delay(
