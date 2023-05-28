@@ -69,6 +69,11 @@ class SimulationEvent(Event):
                 event
             )
 
+class ControlEvent(SimulationEvent):
+    logger = logging.getLogger('Event.SimulationEvent.ControlEvent')
+    def __init__(self,simulation, arrival_time, callback, *args):
+        super(ControlEvent, self).__init__(simulation,arrival_time,callback,*args)
+
 class NetworkEvent(SimulationEvent):
     logger = logging.getLogger('Event.SimulationEvent.NetworkEvent')
     def __init__(self, simulation, arrival_time, callback, *args):
@@ -172,6 +177,14 @@ class NetworkDelay(NetworkEvent):
     logger = logging.getLogger('Event.SimulationEvent.NetworkEvent.NetworkDelay')
     def __init__(self,simulation,arrival_time, callback,*args):
         super(NetworkDelay,self).__init__(simulation,arrival_time,callback,*args)
-        self.logger.debug(f'Network Communication Delay Event for method: {callback}, arrival time: {arrival_time}, simulation time: {self.simulation.time}')
+        self.logger.debug(f'Method: {callback}, arrival time: {arrival_time}, simulation time: {simulation.time}')
 
-__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion', 'NetworkDelay']
+class BlockingDelay(SimulationEvent):
+    """Blocking Delay"""
+    logger = logging.getLogger('Event.SimulationEvent.ControlEvent.BlockingDelay')
+    def __init__(self,simulation,arrival_time, callback, *args):
+        super(BlockingDelay, self).__init__(simulation,arrival_time,callback,*args)
+        self.logger.debug(f'Method: {callback}, will be retried at time: {arrival_time}, simulation time: {simulation.time}')
+
+
+__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion', 'NetworkDelay', 'BlockingDelay']

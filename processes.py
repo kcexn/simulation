@@ -36,7 +36,7 @@ class NetworkDelayProcess(Process):
         self.variance = float(simulation.CONFIGURATION['Computer.Network']['DELAY_STD'])**2
         self.scale = self.variance/self.mean
         self.shape = self.mean/self.scale
-
+        self.logger.info(f'Delay Parameters: Gamma Distribution, Scale: {self.scale}, Shape: {self.shape}')
 
     @property
     def interrenewal_times(self):
@@ -46,6 +46,31 @@ class NetworkDelayProcess(Process):
     def delay(self, callback, *args):
         arrival_time = self.simulation.time + next(self.interrenewal_times)
         return NetworkDelay(self.simulation, arrival_time, callback, *args)
+    
+class BlockingDelayProcess(Process):
+    """Generate Exponential Wait Times when Blocked."""
+    logger = logging.getLogger('Process.BlockingDelayProcess')
+    def __init__(self,simulation):
+        super(BlockingDelayProcess, self).__init__(simulation)
+        self._scale = self.rng.exponential(0.1)
+        self._min = self.rng.exponential(0.1)
+        self._exp = 2
+        self._counter = 0
+
+    @property
+    def interrenewal_time(self):
+        """Exponential Backoff"""
+        return self._min + self._scale*self._exp**self._counter
+
+    def delay(self, callback, *args):
+        arrival_time = self.simulation.time + self.interrenewal_time
+        self._counter += 1
+        return BlockingDelay(self.simulation, arrival_time, callback, *args)
+    
+    def reset(self):
+        self._scale = self.rng.exponential(0.1)
+        self._min = self.rng.exponential(0.1)
+        self._counter = 0
     
 class ArrivalProcess(Process):
     """Generates Arrival Events"""
@@ -113,4 +138,4 @@ class CompletionProcess(Process):
         return JobCompletion(self.simulation, job, self.simulation.time)
 
 
-__all__ = ['ArrivalProcess', 'CompletionProcess', 'NetworkDelayProcess']
+__all__ = ['ArrivalProcess', 'CompletionProcess', 'NetworkDelayProcess', 'BlockingDelayProcess']
