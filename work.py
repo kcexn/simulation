@@ -1,6 +1,8 @@
 import logging
 
+logger = logging.getLogger('Work')
 class Work(object):
+    logger = logging.getLogger('Work')
     def __init__(self,simulation):
         self.simulation = simulation
         self._start_time = simulation.time
@@ -34,7 +36,7 @@ class Work(object):
         if self._finish_time is None:
             self._finish_time = time
         else:
-            logging.debug(f'work item: {self.id} attempted to update finish time more than once')
+            self.logger.debug(f'work item: {self.id} attempted to update finish time more than once')
             raise ValueError(f'Finish time can only be written to once.')
         
     def __repr__(self):
@@ -42,6 +44,7 @@ class Work(object):
     
 
 class Task(Work):
+    logger = logging.getLogger('Work.Task')
     def __init__(self, simulation, job=None):
         super(Task, self).__init__(simulation)
         self._job = job
@@ -66,21 +69,22 @@ class Task(Work):
         if self._finish_time is None:
             self._finish_time = time
         else:
-            logging.debug(f'task: {self.id}, has already finished, and can not be updated twice, simulation time: {self.simulation.time}')
+            self.logger.debug(f'task: {self.id}, has already finished, and can not be updated twice, simulation time: {self.simulation.time}')
             raise ValueError(f'Finish time can only be written to once.')
         tasks = [task for task in self.job.tasks]
         if False not in (task.is_finished for task in tasks):
             job = self._job
-            logging.debug(f'completion time: {time} for job: {job.id}')
+            self.logger.debug(f'completion time: {time} for job: {job.id}')
             job.finish_time = time
 
 class Job(Work):
-    NUM_TASKS = 1
     """A Collection of Tasks"""
+    NUM_TASKS = 1
+    logger = logging.getLogger('Work.Job')
     def __init__(self,simulation, tasks=[]):
         super(Job, self).__init__(simulation)
         self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
-        logging.debug(f'NUM_TASKS: {self.NUM_TASKS}')
+        self.logger.debug(f'NUM_TASKS: {self.NUM_TASKS}')
         if len(tasks) == 0:
             self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
         elif len(tasks) == self.NUM_TASKS:

@@ -8,9 +8,12 @@ else:
     from .events import *
     from .work import *
 
+logger = logging.getLogger('Process')
+
 class Process(object):
     """Generate Events"""
     SEED_SEQUENCE = random.SeedSequence(12345)
+    logger = logging.getLogger('Process')
     def __init__(self, simulation):
         self.simulation=simulation
         self.rng = random.default_rng(self.SEED_SEQUENCE.spawn(1)[0])
@@ -26,15 +29,19 @@ class Process(object):
     
 class NetworkDelayProcess(Process):
     """Generate Network Delays"""
+    logger = logging.getLogger('Process.NetworkDelayProcess')
     def __init__(self, simulation):
         super(NetworkDelayProcess,self).__init__(simulation)
-        self.location = float(simulation.CONFIGURATION['Computer.Network']['MEAN_DELAY'])
-        self.scale = float(simulation.CONFIGURATION['Computer.Network']['DELAY_STD'])
+        self.mean = float(simulation.CONFIGURATION['Computer.Network']['MEAN_DELAY'])
+        self.variance = float(simulation.CONFIGURATION['Computer.Network']['DELAY_STD'])**2
+        self.scale = self.variance/self.mean
+        self.shape = self.mean/self.scale
+
 
     @property
     def interrenewal_times(self):
         while True:
-            yield self.rng.normal(loc=self.location,scale=self.scale)
+            yield self.rng.gamma(self.shape,scale=self.scale)
 
     def delay(self, callback, *args):
         arrival_time = self.simulation.time + next(self.interrenewal_times)
@@ -43,12 +50,13 @@ class NetworkDelayProcess(Process):
 class ArrivalProcess(Process):
     """Generates Arrival Events"""
     INITIAL_TIME=0
+    logger = logging.getLogger('Process.ArrivalProcess')
     def __init__(self,simulation):
         super(ArrivalProcess, self).__init__(simulation)
         self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
         self._arrival_time = float(self.simulation.CONFIGURATION['Processes.Arrival']['INITIAL_TIME'])
         self._SCALE = float(self.simulation.CONFIGURATION['Processes.Arrival']['SCALE'])
-        logging.debug(f'Initial Arrival Time: {self._arrival_time}, num_tasks: {self.NUM_TASKS}, scale: {self._SCALE}')
+        self.logger.debug(f'Initial Arrival Time: {self._arrival_time}, num_tasks: {self.NUM_TASKS}, scale: {self._SCALE}')
 
     def job(self, tasks=[]):
         return JobArrival(self.simulation, self.simulation.time, tasks)
@@ -61,6 +69,7 @@ class ArrivalProcess(Process):
                 self._arrival_time = self._arrival_time + next(self.interrenewal_times)
                 task = Task(self.simulation)
                 task.start_time = self._arrival_time
+                # logging.debug(f'task with id: {task.id}, arrived at time: {task.start_time}')
                 tasks.append(task)
             yield JobArrival(self.simulation, self._arrival_time, tasks=tasks)
  
@@ -87,6 +96,7 @@ class ArrivalProcess(Process):
 
 class CompletionProcess(Process):
     """Generates Completion Events"""
+    logger = logging.getLogger('Process.CompletionProcess')
     def __init__(self,simulation):
         super(CompletionProcess,self).__init__(simulation)
     
@@ -101,7 +111,6 @@ class CompletionProcess(Process):
     def get_job_completion(self,job):
         """Job completion only get scheduled once all tasks in a job are complete"""
         return JobCompletion(self.simulation, job, self.simulation.time)
-
 
 
 __all__ = ['ArrivalProcess', 'CompletionProcess', 'NetworkDelayProcess']
