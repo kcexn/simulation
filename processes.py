@@ -51,26 +51,17 @@ class BlockingDelayProcess(Process):
     """Generate Exponential Wait Times when Blocked."""
     logger = logging.getLogger('Process.BlockingDelayProcess')
     def __init__(self,simulation):
-        super(BlockingDelayProcess, self).__init__(simulation)
-        self._scale = self.rng.exponential(0.1)
-        self._min = self.rng.exponential(0.1)
-        self._exp = 2
-        self._counter = 0
+        super(BlockingDelayProcess,self).__init__(simulation)
+        self._scale = 1
 
     @property
-    def interrenewal_time(self):
-        """Exponential Backoff"""
-        return self._min + self._scale*self._exp**self._counter
+    def interrenewal_times(self):
+        while True:
+            yield self.rng.exponential(self._scale)
 
     def delay(self, callback, *args):
-        arrival_time = self.simulation.time + self.interrenewal_time
-        self._counter += 1
+        arrival_time = self.simulation.time + next(self.interrenewal_times)
         return BlockingDelay(self.simulation, arrival_time, callback, *args)
-    
-    def reset(self):
-        self._scale = self.rng.exponential(0.1)
-        self._min = self.rng.exponential(0.1)
-        self._counter = 0
     
 class ArrivalProcess(Process):
     """Generates Arrival Events"""

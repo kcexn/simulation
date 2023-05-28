@@ -4,26 +4,12 @@ from math import ceil
 from collections import deque
 from numpy import array_split, array
 
-if not __package__:
-    from processes import *
-    from work import *
-    from configure import latin_square
-else:
-    from .processes import *
-    from .work import *
-    from .configure import latin_square
+from processes import *
+from work import *
+from .control import *
+from configure import latin_square
 
 logger = logging.getLogger('Computer')
-
-class Control(object):
-    """A Generic Computer Control"""
-    def __init__(self, simulation, callback, *args):
-        self.simulation = simulation
-        self._callback = callback
-        self._args = args
-    
-    def resolve(self):
-        self._callback(*self.args)
 
 class Server(object):
     """Class to keep track of server status"""
@@ -243,7 +229,6 @@ class Scheduler(object):
                     )
                 )
             else:
-                server.blocker.reset()
                 return fn(*args)
         return func
     
@@ -294,16 +279,19 @@ class Scheduler(object):
     @can_block
     def schedule_task(self, task, server=None):
         """Enqueue the task and return a task completion time"""
-        if not server:
-            # If no server is provided assume the current one.
-            server = self.cluster.servers[self.counter]
-            self.simulation.event_queue.put(
-                server.enqueue_task(task)
-            )
+        if not task.is_finished and not task.job.is_finished:
+            if not server:
+                # If no server is provided assume the current one.
+                server = self.cluster.servers[self.counter]
+                self.simulation.event_queue.put(
+                    server.enqueue_task(task)
+                )
+            else:
+                self.simulation.event_queue.put(
+                    server.enqueue_task(task)
+                )
         else:
-            self.simulation.event_queue.put(
-                server.enqueue_task(task)
-            )
+            self.logger.debug(f'The task: {task.id}, does not need to be enqueued on server: {server.id}. Simulation Time: {self.simulation.time}.')
 
     def schedule_batch(self,batch):
         """Enqueue batches of tasks round robin scheduling"""
