@@ -179,12 +179,19 @@ class NetworkDelay(NetworkEvent):
         super(NetworkDelay,self).__init__(simulation,arrival_time,callback,*args)
         self.logger.debug(f'Method: {callback}, arrival time: {arrival_time}, simulation time: {simulation.time}')
 
-class BlockingDelay(SimulationEvent):
+class BlockingDelay(ControlEvent):
     """Blocking Delay"""
     logger = logging.getLogger('Event.SimulationEvent.ControlEvent.BlockingDelay')
     def __init__(self,simulation,arrival_time, callback, *args):
         super(BlockingDelay, self).__init__(simulation,arrival_time,callback,*args)
         self.logger.debug(f'Method: {callback}, will be retried at time: {arrival_time}, simulation time: {simulation.time}')
 
+class SparrowProbeEvent(ControlEvent):
+    """Sparrow Probe Event"""
+    logger = logging.getLogger('Event.SimulationEVent.ControlEvent.SparrowProbeEvent')
+    def __init__(self, simulation, arrival_time, callback, *args):
+        super(SparrowProbeEvent, self).__init__(simulation, arrival_time, callback, *args)
+        self.logger.debug(f'Method: {callback}, will be called at time: {arrival_time}, simulation time: {simulation.time}')
 
-__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion', 'NetworkDelay', 'BlockingDelay']
+
+__all__ = ['JobArrival', 'JobCompletion', 'TaskArrival', 'TaskCompletion', 'NetworkDelay', 'BlockingDelay','SparrowProbeEvent']

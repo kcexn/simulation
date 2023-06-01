@@ -51,10 +51,7 @@ class Task(Work):
 
     @property
     def job(self):
-        if self._job is not None:
-            return self._job
-        else:
-            raise AttributeError(f'task {self.id} does not belong to any jobs.')
+        return self._job
     
     @job.setter
     def job(self, job):

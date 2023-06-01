@@ -18,11 +18,7 @@ class Simulation(object):
     NUM_JOBS=int(CONFIGURATION['Simulation']['NUM_JOBS'])
     SIMULATION_TIME=float(CONFIGURATION['Simulation']['SIMULATION_TIME'])
     logger = logging.getLogger('Simulation')
-    def __init__(self, filename=None):
-        if filename is not None:
-            self.CONFIGURATION = configure.configuration(filename=filename)
-            self.NUM_JOBS=int(self.CONFIGURATION['Simulation']['NUM_JOBS'])
-            self.SIMULATION_TIME=float(self.CONFIGURATION['Simulation']['SIMULATION_TIME'])
+    def __init__(self):
         self.logger.info(f'NUM_JOBS: {self.NUM_JOBS}, SIMULATION_TIME: {self.SIMULATION_TIME}')
         self.work = []
         self._time = Simulation.INITIAL_TIME

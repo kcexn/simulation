@@ -27,6 +27,15 @@ class Process(object):
     def id(self):
         return id(self)
     
+class RandomChoice(Process):
+    """Used for np random choice"""
+    logger = logging.getLogger('Process.RandomChoice')
+    def __init__(self, simulation):
+        super(RandomChoice, self).__init__(simulation)
+
+    def choose_from(self, array, num_choices):
+        return self.rng.choice(array, size = num_choices, replace=False)
+    
 class NetworkDelayProcess(Process):
     """Generate Network Delays"""
     logger = logging.getLogger('Process.NetworkDelayProcess')
@@ -52,7 +61,7 @@ class BlockingDelayProcess(Process):
     logger = logging.getLogger('Process.BlockingDelayProcess')
     def __init__(self,simulation):
         super(BlockingDelayProcess,self).__init__(simulation)
-        self._scale = 1
+        self._scale = float(self.simulation.CONFIGURATION['Computer.Cluster.Server']['BLOCK_DELAY_SCALE'])
 
     @property
     def interrenewal_times(self):
@@ -129,4 +138,4 @@ class CompletionProcess(Process):
         return JobCompletion(self.simulation, job, self.simulation.time)
 
 
-__all__ = ['ArrivalProcess', 'CompletionProcess', 'NetworkDelayProcess', 'BlockingDelayProcess']
+__all__ = ['ArrivalProcess', 'CompletionProcess', 'NetworkDelayProcess', 'BlockingDelayProcess', 'RandomChoice']
