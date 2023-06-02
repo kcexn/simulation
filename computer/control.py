@@ -1,4 +1,5 @@
 import logging
+from collections import deque
 
 from events import *
 from .abstract_base_classes import ServerClass, SchedulerClass
@@ -23,15 +24,55 @@ class Control(object):
         raise NotImplementedError
 
 
+class SparrowBatch(Control):
+    """Sparrow Scheduler Batch
+    management object for a collection of sparrow probes.
+    """
+    logger = logging.getLogger('computer.Control.Probe')
+    def __init__(self, simulation, batch):
+        super(SparrowBatch, self).__init__(simulation)
+        self.schedulers = set()
+        self.batches = [batch]
+        self.servers = {}
+        self.probes = [SparrowProbe(simulation, task, batch_control=self) for task in batch]
+
+    def control(self, target):
+        pass
+    
+    def bind(self, target, batch=None):
+        if isinstance(target, ServerClass):
+            self.servers[target] = batch
+        elif isinstance(target, SchedulerClass):
+            self.schedulers.add(target)
+            if self not in target.controls:
+                target.add_control(self)
+            for probe in self.probes:
+                probe.bind(target)
+
+    def unbind(self, target):
+        if isinstance(target, SchedulerClass):
+            self.schedulers.discard(target)
+            while self in target.controls:
+                target.controls.remove(self)
+
+    def __del__(self, target):
+        schedulers = [scheduler for scheduler in self.schedulers]
+        for scheduler in schedulers:
+            self.unbind(scheduler)
+
+
+
 class SparrowProbe(Control):
     """Sparrow Scheduler Probe"""
+    from configure import SparrowConfiguration
     logger = logging.getLogger('computer.Control.Probe')
-    def __init__(self, simulation, task):
+    def __init__(self, simulation, task, batch_control=None):
         super(SparrowProbe, self).__init__(simulation)
         self.creation_time = self.simulation.time
         self.bindings = set()
         self.server_arrival_times = {}
         self.task = task
+        self.batch = batch_control
         self.enqueued = False
 
     @staticmethod
@@ -80,6 +121,8 @@ class SparrowProbe(Control):
                     server.control()
                 del(self)
 
+
+    @SparrowConfiguration.enqueue_task
     def server_enqueue_task(self, server):
         scheduler, = tuple(binding for binding in self.bindings if isinstance(binding,SchedulerClass))
         self.logger.debug(f'Scheduler has received response from Sparrow Probe for task: {self.task.id}, for server: {server.id}. Simulation Time: {self.simulation.time}')
