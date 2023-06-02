@@ -90,7 +90,9 @@ class SparrowProbe(Control):
             for binding in bindings:
                 # Binding and Unbinding happens when the scheduler is in control.
                 if binding is not server and isinstance(binding,ServerClass):
-                    self.logger.debug(f'Unbinding, server: {binding.id}, from Sparrow Probe: {self.id}')
+                    scheduler.cluster.network.delay(
+                        self.unbind, binding, logging_message=f'Send Message to Server: {binding.id}, to remove task: {self.task.id} from queue of Sparrow Probes.'
+                    )
                     self.unbind(binding)
             event = scheduler.cluster.network.delay(
                 server.enqueue_task, self.task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {self.task.id}. Simulation Time: {self.simulation.time}'
@@ -128,6 +130,7 @@ class SparrowProbe(Control):
         
     def unbind(self, target):
         """Remove controls from targets control list."""
+        self.logger.debug(f'Unbinding, {target}: {target.id}, from Sparrow Probe: {self.id}')
         self.bindings.discard(target)
         while self in target.controls:
             target.controls.remove(self)

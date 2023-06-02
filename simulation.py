@@ -59,10 +59,19 @@ if __name__ == '__main__':
         [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
         job in jobs
     ]
+    # task_data = [
+    #     [task.start_time, task.finish_time, task.finish_time - task.start_time] for job in jobs for task in job.tasks
+    # ]
     with open('sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')
         writer.writerow(['start time', 'finish time', 'num tasks', 'job latency'])
         writer.writerows(sim_data)
+
+    # with open('task_data.csv','w', newline='') as f:
+    #     writer = csv.writer(f, dialect='excel')
+    #     writer.writerow(['start time', 'finish time', 'task latency'])
+    #     writer.writerows(task_data)
+
     latencies = [data[3] for data in sim_data]
     start_time = sim_data[0][0]
     finish_time = sim_data[-1][1]

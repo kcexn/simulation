@@ -94,7 +94,6 @@ class ArrivalProcess(Process):
                 self._arrival_time = self._arrival_time + next(self.interrenewal_times)
                 task = Task(self.simulation)
                 task.start_time = self._arrival_time
-                # logging.debug(f'task with id: {task.id}, arrived at time: {task.start_time}')
                 tasks.append(task)
             yield JobArrival(self.simulation, self._arrival_time, tasks=tasks)
  
@@ -122,14 +121,24 @@ class ArrivalProcess(Process):
 class CompletionProcess(Process):
     """Generates Completion Events"""
     logger = logging.getLogger('Process.CompletionProcess')
+    job_task_service_times = {}
     def __init__(self,simulation):
         super(CompletionProcess,self).__init__(simulation)
-    
-    def get_task_completion(self, task, offset=0, interrenewal_time=0):
-        if interrenewal_time > 0:
-            completion_time = self.simulation.time + interrenewal_time + offset
-        else:
-            completion_time = self.simulation.time + next(self.interrenewal_times) + offset
+
+    def get_task_completion(self, task, offset=0):
+        completion_time=None
+        match self.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
+            case 'Sparrow':
+                if task.job in self.job_task_service_times:
+                    self.logger.debug(f'job: {task.job} has a registered constant service time: {self.job_task_service_times[task.job]}')
+                    completion_time = self.simulation.time + self.job_task_service_times[task.job] + offset
+                else:
+                    self.logger.debug(f'job: {task.job} does not have a registered constant service time.')
+                    interrenewal_time = next(self.interrenewal_times)
+                    self.job_task_service_times[task.job] = interrenewal_time
+                    completion_time = self.simulation.time + interrenewal_time + offset
+            case _:
+                completion_time = self.simulation.time + next(self.interrenewal_times) + offset
         event = TaskCompletion(self.simulation, task, completion_time, offset=offset)
         return event
     

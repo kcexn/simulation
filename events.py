@@ -139,12 +139,12 @@ class TaskCompletion(Completion):
 
 class JobArrival(Arrival):
     logger = logging.getLogger('Event.Arrival.JobArrival')
-    def __init__(self, simulation, arrival_time, tasks=[]):
+    def __init__(self, simulation, arrival_time, tasks=[], task_service_time=None):
         super(JobArrival, self).__init__(simulation, arrival_time)
         self.tasks=tasks
 
     def resolve(self):
-        job = Job(self.simulation,tasks=self.tasks)
+        job = Job(self.simulation, tasks=self.tasks)
         self.logger.info(f'Job: {job.id}, start time: {job.start_time}.')
         self.simulation.scheduler.schedule_job(job)
 

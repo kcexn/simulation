@@ -8,6 +8,8 @@ def configuration(filename='./configuration.ini'):
     config.read(filename)
     return config
 
+#TODO: Implement Sparrow Latin Square Hybrid. Tolerate Worker Failures, Improve Response Times.
+
 class SchedulingPolicies:
     def round_robin(scheduler, job):
         from numpy import array_split
@@ -41,7 +43,7 @@ class SchedulingPolicies:
         for batch in work:
             for i in range(len(batch)):
                 scheduled_order = [batch[scheduler.LATIN_SQUARE[i][j]] for j in range(len(batch))]
-                scheduler.schedule_batch(scheduled_order)  
+                scheduler.schedule_batch(scheduled_order)
 
     def sparrow(scheduler, job):
         from numpy import array_split
@@ -155,7 +157,7 @@ class BlockingPolicies:
     
 class ServerTaskExecutionPolicies:
     def default_task_reschedule(server, task, event):
-        """= Preempt the job, and move all subsequent tasks up in the queue.
+        """Preempt the job, and move all subsequent tasks up in the queue.
         Task completion is idempotent so there is no need to remove or otherwise update all of the old events.
          they will just eventually clear from the event queue.
         """
@@ -224,6 +226,3 @@ class SchedulerTaskCompletionPolicies:
                 case _:
                     SchedulerTaskCompletionPolicies.default_task_completion(*args)
         return func
-
-
-

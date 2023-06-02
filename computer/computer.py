@@ -49,9 +49,9 @@ class Server(ServerClass):
             control = self.controls.popleft()
             control.control(self)
 
-    def enqueue_task(self, task, interrenewal_time=0):
+    def enqueue_task(self, task):
         offset = self.busy_until - self.simulation.time
-        event = self.completion_process.get_task_completion(task, offset=offset, interrenewal_time=interrenewal_time)
+        event = self.completion_process.get_task_completion(task, offset=offset)
         self.tasks[task] = event
         self.logger.debug(f'completion time for task, {task.id}, is {event.arrival_time}, executing on server: {self.id}')
         return event
