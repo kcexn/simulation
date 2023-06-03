@@ -71,7 +71,6 @@ class Task(Work):
         tasks = [task for task in self.job.tasks]
         if False not in (task.is_finished for task in tasks):
             job = self._job
-            self.logger.debug(f'completion time: {time} for job: {job.id}')
             job.finish_time = time
 
 class Job(Work):

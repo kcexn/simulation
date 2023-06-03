@@ -112,10 +112,11 @@ class TaskArrival(Arrival):
 class TaskCompletion(Completion):
     ORDER=1
     logger = logging.getLogger('Event.Completion.TaskCompletion')
-    def __init__(self, simulation, task, completion_time, offset=0):
+    def __init__(self, simulation, task, completion_time, offset=0, server=None):
         super(TaskCompletion, self).__init__(simulation, completion_time)
         self.task = task
         self._interrenewal_time = completion_time - simulation.time - offset
+        self.server=server
 
     @property
     def interrenewal_time(self):
@@ -127,9 +128,11 @@ class TaskCompletion(Completion):
         except RuntimeError:
             self.logger.debug(f'Task {self.id} has already been completed. Simulation Time: {self.simulation.time}')
         else:
+            def scheduler_complete_task(scheduler=self.simulation.scheduler, task=self.task, server=self.server):
+                scheduler.complete_task(task, server=server)
             self.simulation.event_queue.put(
-                self.simulation.scheduler.cluster.network.delay(
-                    self.simulation.scheduler.complete_task, self.task, logging_message=f'Send message to scheduler to complete task: {self.task.id}. Simulation Time: {self.simulation.time}.'
+                self.server.network.delay(
+                    scheduler_complete_task, logging_message=f'Send message to scheduler from server: {self.server.id}, to complete task: {self.task.id}. Simulation Time: {self.simulation.time}.'
                 )
             )
             # self.simulation.scheduler.complete_task(self.task)

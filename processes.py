@@ -125,10 +125,10 @@ class CompletionProcess(Process):
     def __init__(self,simulation):
         super(CompletionProcess,self).__init__(simulation)
 
-    def get_task_completion(self, task, offset=0):
+    def get_task_completion(self, task, offset=0, server=None):
         completion_time=None
         match self.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
-            case 'Sparrow':
+            case  'Sparrow':
                 if task.job in self.job_task_service_times:
                     self.logger.debug(f'job: {task.job} has a registered constant service time: {self.job_task_service_times[task.job]}')
                     completion_time = self.simulation.time + self.job_task_service_times[task.job] + offset
@@ -139,7 +139,7 @@ class CompletionProcess(Process):
                     completion_time = self.simulation.time + interrenewal_time + offset
             case _:
                 completion_time = self.simulation.time + next(self.interrenewal_times) + offset
-        event = TaskCompletion(self.simulation, task, completion_time, offset=offset)
+        event = TaskCompletion(self.simulation, task, completion_time, offset=offset, server=server)
         return event
     
     def get_job_completion(self,job):
