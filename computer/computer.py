@@ -32,7 +32,7 @@ class Server(ServerClass):
         else:
             max_event = max(events)
             if max_event.arrival_time > self.simulation.time:
-                time = self.simulation.time
+                time = max_event.arrival_time
                 self.logger.debug(f'server: {self.id} is busy until: {time}, simulation time: {self.simulation.time}')
                 return time
             else:
@@ -135,7 +135,7 @@ class Network(object):
 
 class Scheduler(SchedulerClass):
     from configure import SchedulingPolicies, BlockingPolicies, SchedulerTaskCompletionPolicies
-    POLICY = 'LatinSquare' # Currently Support RoundRobin, FullRepetition, LatinSquare
+    POLICY = 'LatinSquare' # Currently Support RoundRobin, FullRepetition, LatinSquare, Sparrow, 
     LATIN_SQUARE = array(latin_square(6))
     logger = logging.getLogger('Computer.Scheduler')
     def __init__(self, simulation):

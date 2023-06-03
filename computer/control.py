@@ -41,7 +41,7 @@ class SparrowBatch(Control):
     
     def bind(self, target, batch=None):
         if isinstance(target, ServerClass):
-            self.servers[target] = batch
+            self.server_tasks[target] = batch
         elif isinstance(target, SchedulerClass):
             self.bindings.add(target)
             if self not in target.controls:
@@ -50,7 +50,11 @@ class SparrowBatch(Control):
                 probe.bind(target)
 
     def unbind(self, target):
-        if isinstance(target, SchedulerClass):
+        if isinstance(target, ServerClass):
+            del self.server_tasks[target]
+            for probe in self.probes:
+                probe.unbind(target)
+        elif isinstance(target, SchedulerClass):
             self.schedulers.discard(target)
             while self in target.controls:
                 target.controls.remove(self)
@@ -68,7 +72,7 @@ class SparrowProbe(Control):
         self.creation_time = self.simulation.time
         self.server_arrival_times = {}
         self.task = task
-        self.batch = batch_control
+        self.batch_control = batch_control
         self.enqueued = False
 
     @staticmethod
@@ -148,8 +152,6 @@ class SparrowProbe(Control):
         targets = [target for target in self.bindings]
         for target in targets:
             self.unbind(target)
-        if self.batch is not None:
-            self.batch.probes.discard(self)
 
 __all__ = ['SparrowProbe']
 
