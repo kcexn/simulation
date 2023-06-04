@@ -87,6 +87,7 @@ class SparrowProbe(Control):
     from configure import SparrowScheduler
     from enum import IntEnum
     class States(IntEnum):
+        blocked = -2
         terminated = -1
         server_probed = 0
         server_ready = 1
@@ -103,12 +104,13 @@ class SparrowProbe(Control):
         self.task = task
         self.batch_control = batch_control
         self.logger.debug(f'Task: {task.id} bound to probe: {self.id}. Simulation time: {self.simulation.time}.')
-        # Sparrow has 5 states,
+        # Sparrow has 6 states,
         # 0: Intialize Scheduler - Probe Server - Awaiting Server Response
         # 1: Server Response - Ready to Enqueue Task - Awaiting Scheduler Response
         # 2: Scheduler Response - Task Notify Server - Awaiting Server Response
         # 3: Task Completion - Notify Scheduler
         # -1: Terminated, Target to remove probe from controls.
+        # -2: Blocked, Target blocked on a control signal.
 
         # Task Notify will contain one of two messages:
         # 0: Enqueue Task - Server Selected to Enqueue Task - Scheduler awaiting server task Completion notification
@@ -147,7 +149,8 @@ class SparrowProbe(Control):
             self.server_control(target)
         if isinstance(target, SchedulerClass):
             self.scheduler_control(target)
-        
+
+    @SparrowScheduler.Server.Control.server_control_select
     def server_control(self, target):
         server = target
         match self.target_states[server]:

@@ -128,6 +128,7 @@ class TaskCompletion(Completion):
         except RuntimeError:
             self.logger.debug(f'Task {self.id} has already been completed. Simulation Time: {self.simulation.time}')
         else:
+            self.server.complete_task(self.task)
             def scheduler_complete_task(scheduler=self.simulation.scheduler, task=self.task, server=self.server):
                 scheduler.complete_task(task, server=server)
             self.simulation.event_queue.put(
