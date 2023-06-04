@@ -127,8 +127,8 @@ class CompletionProcess(Process):
 
     def get_task_completion(self, task, offset=0, server=None):
         completion_time=None
-        match self.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
-            case  'Sparrow':
+        match self.simulation.CONFIGURATION['Processes.Completion.Task']['POLICY']:
+            case 'RandomJob':
                 if task.job in self.job_task_service_times:
                     self.logger.debug(f'job: {task.job} has a registered constant service time: {self.job_task_service_times[task.job]}')
                     completion_time = self.simulation.time + self.job_task_service_times[task.job] + offset
@@ -137,16 +137,7 @@ class CompletionProcess(Process):
                     interrenewal_time = next(self.interrenewal_times)
                     self.job_task_service_times[task.job] = interrenewal_time
                     completion_time = self.simulation.time + interrenewal_time + offset
-            case  'SparrowBatch':
-                if task.job in self.job_task_service_times:
-                    self.logger.debug(f'job: {task.job} has a registered constant service time: {self.job_task_service_times[task.job]}')
-                    completion_time = self.simulation.time + self.job_task_service_times[task.job] + offset
-                else:
-                    self.logger.debug(f'job: {task.job} does not have a registered constant service time.')
-                    interrenewal_time = next(self.interrenewal_times)
-                    self.job_task_service_times[task.job] = interrenewal_time
-                    completion_time = self.simulation.time + interrenewal_time + offset
-            case _:
+            case 'RandomTask':
                 completion_time = self.simulation.time + next(self.interrenewal_times) + offset
         event = TaskCompletion(self.simulation, task, completion_time, offset=offset, server=server)
         return event

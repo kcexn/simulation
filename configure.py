@@ -47,16 +47,6 @@ class SchedulingPolicies:
                 ordered_tasks = [batch[idx] for idx in sequence if idx < len(batch)]
                 scheduler.schedule_batch(ordered_tasks)
 
-    def sparrow(scheduler, job):
-        from numpy import array_split
-        tasks = job.tasks
-        num_probes = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler']['NUM_SPARROW_PROBES'])
-        work = [work.tolist() for work in array_split(tasks,len(tasks))]
-        scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in work for task in batch]}. Simulation Time: {scheduler.simulation.time}')
-        for batch in work:
-            for _ in range(num_probes):
-                scheduler.schedule_batch(batch)
-
     def sparrow_batch(scheduler,job):
         from numpy import array_split
         from math import ceil
@@ -66,7 +56,7 @@ class SchedulingPolicies:
         def square(n):
             return [[(i+j)%n for i in range(n)] for j in range(n)]
         latin_square = square(latin_square_order)
-        num_probes = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler']['NUM_SPARROW_PROBES'])
+        num_probes = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
         work = [tuple(work.tolist()) for work in array_split(tasks,ceil(len(tasks))/latin_square_order)]
         scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in work for task in batch]}. Simulation Time: {scheduler.simulation.time}')
         for batch in work:
@@ -94,7 +84,7 @@ class SchedulingPolicies:
                     SchedulingPolicies.latin_square(*args)
                     return fn(*args)
                 case 'Sparrow':
-                    SchedulingPolicies.sparrow(*args)
+                    SparrowScheduler.Scheduler.Enqueuing.sparrow(*args)
                     return fn(*args)
                 case 'SparrowBatch':
                     SchedulingPolicies.sparrow_batch(*args)
@@ -135,6 +125,8 @@ class SchedulingPolicies:
         def func(*args):
             policy = args[0].POLICY
             match policy:
+                case 'Sparrow':
+                    SparrowScheduler.Scheduler.Enqueuing.schedule_batch(*args)
                 case 'SparrowBatch':
                     SchedulingPolicies.sparrow_schedule_sequenced_batch(*args)
                 case _:
@@ -159,7 +151,7 @@ class ServerSelectionPolicies:
     def server_selection(fn):
         def func(*args):
             cluster = args[0]
-            num_probes = int(cluster.simulation.CONFIGURATION['Computer.Scheduler']['NUM_SPARROW_PROBES'])
+            num_probes = int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
             latin_square_order = int(cluster.simulation.CONFIGURATION['Computer.Scheduler']['LATIN_SQUARE_ORDER'])
             match cluster.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
                 case 'Sparrow':
@@ -186,36 +178,15 @@ class BlockingPolicies:
                 )
             )
 
-    def sparrow_blocking(scheduler, task, server):
-        """Sparrow will block all task scheduling requests. 
-        Instead task scheduling is handled by control signals in the SparrowProbes."""
-        from computer.control import SparrowProbe
-        try:
-            probe, = tuple(probe for probe in scheduler.controls if isinstance(probe, SparrowProbe) and probe.task is task)
-        except ValueError as e:
-            # New probe.
-            probe = SparrowProbe(scheduler.simulation, task)
-            probe.bind(scheduler)
-        except Exception as e:
-            scheduler.logger.debug(f'Unexpected Error: {e}')
-        else:
-            # Probe already bound to scheduler.
-            pass
-        finally:
-            # Probe already bound to scheduler.
-            probe.bind(server)
-        if server.busy_until == scheduler.simulation.time:
-            server.control()
-
     def blocking(fn):
         """Decorator to Choose a Blocking Policy."""
         def func(*args):
             scheduler = args[0]
             match scheduler.POLICY:
                 case 'Sparrow':
-                    BlockingPolicies.sparrow_blocking(*args)
+                    SparrowScheduler.Server.Queue.block(*args)
                 case 'SparrowBatch':
-                    BlockingPolicies.sparrow_blocking(*args)
+                    SparrowScheduler.Server.Queue.block(*args)
                 case _:
                     BlockingPolicies.infinite_queue(*args)
                     return fn(*args)
@@ -258,20 +229,14 @@ class ServerTaskExecutionPolicies:
                         )
                         server.tasks[task] = new_event
 
-    def sparrow_task_completion(server):
-        """Sparrow tasks are scheduled by RPC. So after
-        tasks complete on the server, the server needs to enter the control loop.
-        """
-        server.control()
-
     def task_completion(fn):
         def func(*args):
             server = args[0]
             match server.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
                 case 'Sparrow':
-                    ServerTaskExecutionPolicies.sparrow_task_completion(*args)
+                    SparrowScheduler.Server.Executor.task_complete(*args)
                 case 'SparrowBatch':
-                    ServerTaskExecutionPolicies.sparrow_task_completion(*args)
+                    SparrowScheduler.Server.Executor.task_complete(*args)
                 case _:
                     ServerTaskExecutionPolicies.default_task_completion(*args)
         return func
@@ -287,15 +252,6 @@ class SchedulerTaskCompletionPolicies:
                 )
             )
 
-    def sparrow_task_completion(scheduler, task, server=None):
-        from computer.control import SparrowProbe
-        server.logger.debug(
-            f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
-        )
-        probe, = tuple(control for control in scheduler.controls if isinstance(control, SparrowProbe) and task is control.task)
-        probe.unbind(server)
-        server.complete_task()
-
     def task_complete(fn):
         def func(*args, **kwargs):
             fn(*args)
@@ -303,70 +259,16 @@ class SchedulerTaskCompletionPolicies:
             policy = scheduler.POLICY
             match policy:
                 case 'Sparrow':
-                    SchedulerTaskCompletionPolicies.sparrow_task_completion(*args, **kwargs)
+                    SparrowScheduler.Scheduler.Executor.task_complete(*args,**kwargs)
                 case 'SparrowBatch':
-                    SchedulerTaskCompletionPolicies.sparrow_task_completion(*args, **kwargs)
+                    SparrowScheduler.Scheduler.Executor.task_complete(*args,**kwargs)
                 case _:
                     SchedulerTaskCompletionPolicies.default_task_completion(*args)
         return func
 
 class SparrowConfiguration:
     # Sparrow Probe Task Enqueuing Policies.
-    def server_enqueue_task(probe, server):
-        from computer.abstract_base_classes import SchedulerClass, ServerClass
-        scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding,SchedulerClass))
-        if probe.task.is_finished:
-            # Probe task is finished respond to server that task is done.
-            scheduler.logger.debug(f'Task: {probe.task.id} has already finished, informing server: {server.id}. Simulation Time: {probe.simulation.time}')
-            def unbind_probe(probe=probe, server=server):
-                probe.unbind(server)
-                server.control()
-            event = server.network.delay(
-                unbind_probe, logging_message=f'Send message to server: {server.id}, task: {probe.task.id} is finished. Simulation time: {server.simulation.time}'
-            )
-            server.tasks[probe.task]=event
-            probe.simulation.event_queue.put(
-                event
-            )
-        elif not probe.enqueued:
-            probe.enqueued = True
-            scheduler.logger.debug(
-                f'Scheduler has received response from sparrow probe: {probe.id}, for task: {probe.task.id}, from server: {server.id}. '
-                + f'Enqueuing task on server. Simulation time: {probe.simulation.time}.'
-            )
-            event = scheduler.cluster.network.delay(
-                server.enqueue_task, probe.task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {probe.task.id}. Simulation Time: {probe.simulation.time}'
-            )
-            server.tasks[probe.task] = event #Block subsequent probes. This will be overwritten by the server once the task is successfully enqueued.
-            probe.simulation.event_queue.put(
-                event
-            )
-            if probe.simulation.CONFIGURATION['Computer.Scheduler']['PREEMPTION'].lower() == 'true':
-                bindings = [binding for binding in probe.bindings if isinstance(binding, ServerClass) and binding is not server]
-                for binding in bindings:
-                    def unbind_probe(probe=probe, server=binding):
-                        probe.unbind(server)
-                        server.control()
-                    event = scheduler.cluster.network.delay(
-                        unbind_probe, logging_message=f'Send Preemption for probe: {probe.id} to server: {server.id} for task: {probe.task.id}. Simulation Time: {probe.simulation.time}.'
-                    )
-                    probe.simulation.event_queue.put(
-                        event
-                    )
-        else:
-            scheduler.logger.debug(f'Task: {probe.task.id}, has been enqueued already. Rejecting the response. Simulation time: {probe.simulation.time}')
-            def unbind_probe(probe=probe, server=server):
-                probe.unbind(server)
-                server.control()
-            event = scheduler.cluster.network.delay(
-                unbind_probe, logging_message=f'Send Message to Server: {server.id} do not enqueue task: {probe.task.id}. Simulation Time: {probe.simulation.time}'
-            )
-            server.tasks[probe.task]=event
-            probe.simulation.event_queue.put(
-                event
-            )
-
-    def batch_enqueue_task(probe, server):
+     def batch_enqueue_task(probe, server):
         from computer.abstract_base_classes import SchedulerClass
         scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding,SchedulerClass))
         if probe.task.is_finished:
@@ -412,16 +314,149 @@ class SparrowConfiguration:
             probe.simulation.event_queue.put(
                 event
             )      
+    
 
-    def enqueue_task(fn):
-        def func(*args):
-            probe = args[0]
-            policy = probe.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
-            match policy:
-                case 'Sparrow':
-                    SparrowConfiguration.server_enqueue_task(*args)
-                case 'SparrowBatch':
-                    SparrowConfiguration.batch_enqueue_task(*args)
-                case _:
-                    fn(*args)
-        return func
+class SparrowScheduler:
+    class Scheduler:
+        """These methods are logically linked to the scheduler."""
+        class Enqueuing:
+            def sparrow(scheduler, job):
+                from numpy import array_split
+                from math import ceil
+                from computer.control import SparrowBatch
+                tasks = job.tasks
+                batch_size = 1
+                num_probes = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
+                work = [tuple(work.tolist()) for work in array_split(tasks,ceil(len(tasks))/batch_size)]
+                scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in work for task in batch]}. Simulation Time: {scheduler.simulation.time}')
+                for batch in work:
+                    batch_control = SparrowBatch(scheduler.simulation, batch)
+                    batch_control.bind(scheduler)
+                    for _ in range(num_probes):
+                        scheduler.schedule_batch(batch)
+
+            def schedule_batch(self,batch):
+                """Enqueue batches of tasks scheduling"""
+                server = next(self.servers)
+                def schedule_tasks(batch=batch, server=server, scheduler=self):
+                    from computer.control import SparrowProbe
+                    for task in batch:
+                        probe, = tuple(probe for probe in scheduler.controls if isinstance(probe, SparrowProbe) and probe.task is task)
+                        probe.bind(server)
+                    server.control()
+                self.simulation.event_queue.put(
+                    self.cluster.network.delay(
+                        schedule_tasks, logging_message=f'Send tasks {[task for task in batch]} to be scheduled on server {server.id}. Simulation Time: {self.simulation.time}.'
+                    )
+                )
+
+            def scheduler_enqueue_task_notify(probe, server):
+                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding,SchedulerClass))
+                if probe.task.is_finished:
+                    # Probe task is finished respond to server that task is done.
+                    scheduler.logger.debug(f'Task: {probe.task.id} has already finished, informing server: {server.id}. Simulation Time: {probe.simulation.time}')
+                    def unbind_probe(probe=probe, server=server):
+                        probe.target_states[server]=probe.states.terminated
+                        server.control()
+                    event = server.network.delay(
+                        unbind_probe, logging_message=f'Send message to server: {server.id}, task: {probe.task.id} is finished. Simulation time: {server.simulation.time}'
+                    )
+                    server.tasks[probe.task]=event
+                    probe.simulation.event_queue.put(
+                        event
+                    )
+                elif not probe.enqueued:
+                    probe.target_states[scheduler] = probe.states.server_executing_task
+                    scheduler.logger.debug(
+                        f'Scheduler has received response from sparrow probe: {probe.id}, for task: {probe.task.id}, from server: {server.id}. '
+                        + f'Enqueuing task on server. Simulation time: {probe.simulation.time}.'
+                    )
+                    def enqueue_task(server=server):
+                        server.control()
+                    event = scheduler.cluster.network.delay(
+                        enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {probe.task.id}. Simulation Time: {probe.simulation.time}'
+                    )
+                    server.tasks[probe.task] = event #Block subsequent probes. This will be overwritten by the server once the task is successfully enqueued.
+                    probe.simulation.event_queue.put(
+                        event
+                    )
+                    if probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['PREEMPTION'].lower() == 'true':
+                        bindings = [binding for binding in probe.bindings if isinstance(binding, ServerClass) and binding is not server]
+                        for binding in bindings:
+                            def unbind_probe(probe=probe, server=binding):
+                                probe.target_states[server] = probe.states.terminated
+                                server.control()
+                            event = scheduler.cluster.network.delay(
+                                unbind_probe, logging_message=f'Send Preemption for probe: {probe.id} to server: {server.id} for task: {probe.task.id}. Simulation Time: {probe.simulation.time}.'
+                            )
+                            probe.simulation.event_queue.put(
+                                event
+                            )
+                else:
+                    scheduler.logger.debug(f'Task: {probe.task.id}, has been enqueued already. Rejecting the response. Simulation time: {probe.simulation.time}')
+                    def unbind_probe(probe=probe, server=server):
+                        probe.target_states[server] = probe.states.terminated
+                        server.control()
+                    event = scheduler.cluster.network.delay(
+                        unbind_probe, logging_message=f'Send Message to Server: {server.id} do not enqueue task: {probe.task.id}. Simulation Time: {probe.simulation.time}'
+                    )
+                    server.tasks[probe.task]=event
+                    probe.simulation.event_queue.put(
+                        event
+                    )
+
+            def enqueue_task(fn):
+                def func(*args):
+                    probe = args[0]
+                    policy = probe.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
+                    match policy:
+                        case 'Sparrow':
+                            SparrowScheduler.Scheduler.Enqueuing.scheduler_enqueue_task_notify(*args)
+                        case 'SparrowBatch':
+                            SparrowConfiguration.batch_enqueue_task(*args)
+                        case _:
+                            fn(*args)
+                return func
+
+        class Executor:
+            def task_complete(scheduler, task, server=None):
+                from computer.control import SparrowProbe
+                server.logger.debug(
+                    f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
+                )
+                probe, = tuple(control for control in scheduler.controls if isinstance(control, SparrowProbe) and task is control.task)
+                probe.target_states[server] = probe.states.task_finished
+                probe.target_states[scheduler] = probe.states.task_finished
+                scheduler.control()
+                server.complete_task()
+
+    class Server:
+        class Queue:
+            def block(scheduler, task, server):
+                """Sparrow will block all task scheduling requests. 
+                Instead task scheduling is handled by control signals in the SparrowProbes."""
+                from computer.control import SparrowProbe
+                try:
+                    probe, = tuple(probe for probe in scheduler.controls if isinstance(probe, SparrowProbe) and probe.task is task)
+                except ValueError as e:
+                    # New probe.
+                    probe = SparrowProbe(scheduler.simulation, task)
+                    probe.bind(scheduler)
+                except Exception as e:
+                    scheduler.logger.debug(f'Unexpected Error: {e}')
+                else:
+                    # Probe already bound to scheduler.
+                    pass
+                finally:
+                    # Probe already bound to scheduler.
+                    probe.bind(server)
+                if server.busy_until == scheduler.simulation.time:
+                    server.control()
+
+        class Executor:
+            def task_complete(server):
+                """Sparrow tasks are scheduled by RPC. So after
+                tasks complete on the server, the server needs to enter the control loop.
+                """
+                server.control()

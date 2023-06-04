@@ -34,6 +34,7 @@ class Work(object):
     @finish_time.setter
     def finish_time(self,time):
         if self._finish_time is None:
+            self.logger.debug(f'{self}: {self.id} Finished at time: {time}. Simulation time: {self.simulation.time}.')
             self._finish_time = time
         else:
             self.logger.debug(f'work item: {self.id} attempted to update finish time more than once')
