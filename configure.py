@@ -234,7 +234,10 @@ class SparrowScheduler:
             def sparrow(scheduler, job):
                 from numpy import array_split
                 from math import ceil
-                from computer.control import SparrowBatch
+                if not __package__:
+                    from computer.control import SparrowBatch
+                else:
+                    from .computer.control import SparrowBatch
                 tasks = job.tasks
                 batch_size = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE'])
                 batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks)/batch_size))]
@@ -246,7 +249,10 @@ class SparrowScheduler:
 
             def schedule_batch(scheduler,batch):
                 """Enqueue batches of tasks scheduling"""
-                from computer.control import SparrowProbe
+                if not __package__:
+                    from computer.control import SparrowProbe
+                else:
+                    from .computer.control import SparrowProbe
                 num_probes = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
                 for idx,server in enumerate(scheduler.servers):
                     if idx >= num_probes:
@@ -263,7 +269,10 @@ class SparrowScheduler:
                         )
 
             def batch_sampling_enqueue_task_notify(probe,server):
-                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                if not __package__:
+                    from computer.abstract_base_classes import SchedulerClass, ServerClass
+                else:
+                    from .computer.abstract_base_classes import SchedulerClass, ServerClass
                 scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding, SchedulerClass))
                 num_probes = int(probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
                 batch_control = probe.batch_control
@@ -306,7 +315,10 @@ class SparrowScheduler:
                             )
 
             def scheduler_enqueue_task_notify(probe, server):
-                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                if not __package__:
+                    from computer.abstract_base_classes import SchedulerClass, ServerClass
+                else:
+                    from .computer.abstract_base_classes import SchedulerClass, ServerClass
                 scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding,SchedulerClass))
                 if probe.task.is_finished:
                     # Probe task is finished respond to server that task is done.
@@ -381,7 +393,10 @@ class SparrowScheduler:
 
         class Executor:
             def task_complete(scheduler, task, server=None):
-                from computer.control import SparrowProbe
+                if not __package__:
+                    from computer.control import SparrowProbe
+                else:
+                    from .computer.control import SparrowProbe
                 server.logger.debug(
                     f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
                 )
@@ -394,7 +409,10 @@ class SparrowScheduler:
             def block(scheduler, task, server):
                 """Sparrow will block all task scheduling requests. 
                 Instead task scheduling is handled by control signals in the SparrowProbes."""
-                from computer.control import SparrowProbe
+                if not __package__:
+                    from computer.control import SparrowProbe
+                else:
+                    from .computer.control import SparrowProbe
                 try:
                     probe, = tuple(probe for probe in scheduler.controls if isinstance(probe, SparrowProbe) and probe.task is task)
                 except ValueError as e:
@@ -415,14 +433,20 @@ class SparrowScheduler:
                 """Sparrow tasks are scheduled by RPC. So after
                 tasks complete on the server, the server needs to enter the control loop.
                 """
-                from computer.control import SparrowProbe
+                if not __package__:
+                    from computer.control import SparrowProbe
+                else:
+                    from .computer.control import SparrowProbe
                 probe, = tuple(control for control in server.controls if isinstance(control, SparrowProbe) and task is control.task)
                 probe.target_states[server] = probe.states.task_finished
                 server.control()
 
         class Control:
             def late_binding_server_control(probe, target):
-                from computer.control import SparrowProbe
+                if not __package__:
+                    from computer.control import SparrowProbe
+                else:
+                    from .computer.control import SparrowProbe
                 server = target
                 match probe.target_states[server]:
                     case probe.states.server_probed:
@@ -520,7 +544,10 @@ class LatinSquareScheduler:
             def latin_square(scheduler, job):
                 from numpy import array_split
                 from math import ceil
-                from computer.control import LatinSquareBatch
+                if not __package__:
+                    from computer.control import LatinSquareBatch
+                else:
+                    from .computer.control import LatinSquareBatch
                 tasks = job.tasks
                 batch_size = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
                 batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks))/batch_size)]
@@ -532,7 +559,10 @@ class LatinSquareScheduler:
 
             def schedule_batch(scheduler,batch):
                 """Enqueue batches of tasks scheduling"""
-                from computer.control import LatinSquareControl
+                if not __package__:
+                    from computer.control import LatinSquareControl
+                else:
+                    from .computer.control import LatinSquareControl
                 from collections import deque
                 num_tasks = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
                 batch = deque(batch)
@@ -554,7 +584,10 @@ class LatinSquareScheduler:
                     batch.rotate()
 
             def batch_sampling_enqueue_task_notify(probe,server):
-                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                if not __package__:
+                    from computer.abstract_base_classes import SchedulerClass, ServerClass
+                else:
+                    from .computer.abstract_base_classes import SchedulerClass, ServerClass
                 scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding, SchedulerClass))
                 num_tasks = int(probe.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
                 batch_control = probe.batch_control
@@ -596,7 +629,10 @@ class LatinSquareScheduler:
                             )
 
             def scheduler_enqueue_task_notify(control, server):
-                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                if not __package__:
+                    from computer.abstract_base_classes import SchedulerClass
+                else:
+                    from .computer.abstract_base_classes import SchedulerClass
                 scheduler, = tuple(binding for binding in control.bindings if isinstance(binding,SchedulerClass))
                 if not control.task.is_finished:
                     scheduler.logger.debug(
@@ -648,7 +684,10 @@ class LatinSquareScheduler:
 
         class Executor:
             def task_complete(scheduler, task, server=None):
-                from computer.control import LatinSquareControl
+                if not __package__:
+                    from computer.control import LatinSquareControl
+                else:
+                    from .computer.control import LatinSquareControl
                 server.logger.debug(
                     f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
                 )
@@ -658,8 +697,12 @@ class LatinSquareScheduler:
 
         class Control:
             def late_binding_scheduler_preemption(control, scheduler):
-                from computer.control import LatinSquareControl
-                from computer.abstract_base_classes import ServerClass
+                if not __package__:
+                    from computer.control import LatinSquareControl
+                    from computer.abstract_base_classes import ServerClass
+                else:
+                    from .computer.control import LatinSquareControl
+                    from .computer.abstract_base_classes import ServerClass
                 if isinstance(control, LatinSquareControl) and control.task.is_finished:
                     bound_servers = set(binding for binding in control.bindings if isinstance(binding, ServerClass))
                     for server in bound_servers:
@@ -695,7 +738,10 @@ class LatinSquareScheduler:
            def block(scheduler, task, server):
                 """LatinSquare will block all task scheduling requests. 
                 Instead task scheduling is handled by control signals in the LatinSquareControls."""
-                from computer.control import LatinSquareControl
+                if not __package__:
+                    from computer.control import LatinSquareControl
+                else:
+                    from .computer.control import LatinSquareControl
                 try:
                     control, = tuple(control for control in scheduler.controls if isinstance(control, LatinSquareControl) and control.task is task)
                 except ValueError:
@@ -716,7 +762,10 @@ class LatinSquareScheduler:
                 """LatinSquare tasks are scheduled by RPC. So after
                 tasks complete on the server, the server needs to enter the control loop.
                 """
-                from computer.control import LatinSquareControl
+                if not __package__:
+                    from computer.control import LatinSquareControl
+                else:
+                    from .computer.control import LatinSquareControl
                 try:
                     control, = tuple(control for control in server.controls if isinstance(control, LatinSquareControl) and task is control.task)
                 except ValueError:
@@ -728,7 +777,10 @@ class LatinSquareScheduler:
 
         class Control:
             def late_binding_server_control(control, target):
-                from computer.control import LatinSquareControl
+                if not __package__:
+                    from computer.control import LatinSquareControl
+                else:
+                    from .computer.control import LatinSquareControl
                 server = target
                 match control.target_states[server]:
                     case control.states.blocked:

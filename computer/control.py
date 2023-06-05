@@ -1,8 +1,11 @@
 import logging
-from collections import deque
 
-from events import *
-from .abstract_base_classes import ServerClass, SchedulerClass
+if __package__ == 'computer':
+    from events import *
+    from .abstract_base_classes import ServerClass, SchedulerClass
+else:
+    from ..events import *
+    from .abstract_base_classes import ServerClass, SchedulerClass
 
 class Control(object):
     """A Generic Computer Control"""
@@ -83,8 +86,11 @@ class LatinSquareBatch(Control):
 class LatinSquareControl(Control):
     """Latin Square Scheduler Control
     """
-    from configure import LatinSquareScheduler
     from enum import IntEnum
+    if __package__ == 'computer':
+        from configure import LatinSquareScheduler
+    else:
+        from ..configure import LatinSquareScheduler
     class States(IntEnum):
         blocked = -2
         terminated = -1
@@ -220,8 +226,11 @@ class SparrowBatch(Control):
 
 class SparrowProbe(Control):
     """Sparrow Scheduler Probe"""
-    from configure import SparrowScheduler
     from enum import IntEnum
+    if __package__ == 'computer':
+        from configure import SparrowScheduler
+    else:
+        from ..configure import SparrowScheduler
     class States(IntEnum):
         blocked = -2
         terminated = -1
@@ -262,7 +271,7 @@ class SparrowProbe(Control):
 
     @property
     def enqueued(self):
-        return self.probe_state >= self.states['server_executing_task']
+        return self.probe_state >= self.states.server_executing_task
 
     @Control.cleanup_control
     def control(self, target):

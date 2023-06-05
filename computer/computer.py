@@ -2,17 +2,27 @@ import logging
 from collections import deque
 from numpy import array
 
-from processes import *
-from work import *
-from .control import *
-from .abstract_base_classes import ServerClass, SchedulerClass
-from configure import latin_square
+if __package__ == 'computer':
+    from processes import *
+    from work import *
+    from .control import *
+    from .abstract_base_classes import ServerClass, SchedulerClass
+    from configure import latin_square
+else:
+    from ..processes import *
+    from ..work import *
+    from .control import *
+    from .abstract_base_classes import ServerClass, SchedulerClass
+    from ..configure import latin_square
 
 logger = logging.getLogger('Computer')
 
 class Server(ServerClass):
     """Class to keep track of server status"""
-    from configure import ServerTaskExecutionPolicies
+    if __package__ == 'computer':
+        from configure import ServerTaskExecutionPolicies
+    else:
+        from ..configure import ServerTaskExecutionPolicies
     logger = logging.getLogger('Computer.Server')
     def __init__(self, simulation, network):
         self.simulation = simulation
@@ -74,7 +84,10 @@ class Server(ServerClass):
 
 class Cluster(object):
     """A Collection of Servers"""
-    from configure import ServerSelectionPolicies
+    if __package__ == 'computer':
+        from configure import ServerSelectionPolicies
+    else:
+        from ..configure import ServerSelectionPolicies
     logger = logging.getLogger('Computer.Cluster')
     NUM_SERVERS = 6
     def __init__(self,simulation):
@@ -134,7 +147,10 @@ class Network(object):
 
 
 class Scheduler(SchedulerClass):
-    from configure import SchedulingPolicies, BlockingPolicies, SchedulerTaskCompletionPolicies
+    if __package__ == 'computer':
+        from configure import SchedulingPolicies, BlockingPolicies, SchedulerTaskCompletionPolicies
+    else:
+        from ..configure import SchedulingPolicies, BlockingPolicies, SchedulerTaskCompletionPolicies
     POLICY = 'LatinSquare' # Currently Support RoundRobin, FullRepetition, LatinSquare, Sparrow, 
     LATIN_SQUARE = array(latin_square(6))
     logger = logging.getLogger('Computer.Scheduler')
