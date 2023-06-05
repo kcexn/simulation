@@ -11,6 +11,17 @@ class Control(object):
         self.simulation = simulation
         self.bindings = set()
 
+    @staticmethod
+    def cleanup_control(fn):
+        def func(*args):
+            control = args[0]
+            fn(*args)
+            target = args[1]
+            if target in control.bindings and control not in target.controls:
+                control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
+                target.add_control(control)
+        return func
+
     @property
     def id(self):
         return id(self)
@@ -23,6 +34,143 @@ class Control(object):
     
     def unbind(self, target):
         raise NotImplementedError
+    
+
+class LatinSquareBatch(Control):
+    """Latin Square Batch Control Management for collections of tasks.
+    """
+    logger = logging.getLogger('computer.Control.LatinSquareBatch')
+    def __init__(self, simulation, batch):
+        super(LatinSquareBatch, self).__init__(simulation)
+        self.batches = [batch]
+        self.controls = set(LatinSquareControl(simulation, task, batch_control=self) for task in batch)
+        self.logger.debug(f'Controls in batch: {[control for control in self.controls]}. Simulation time: {self.simulation.time}.')
+
+    @Control.cleanup_control
+    def control(self, target):
+        pass
+
+    def bind(self, target, batch=None):
+        if isinstance(target, ServerClass):
+            self.bind_server(target, batch)
+        elif isinstance(target, SchedulerClass):
+            self.bind_scheduler(target, batch)
+
+    def bind_server(self, target, batch=None):
+        self.server_tasks[target] = batch
+
+    def bind_scheduler(self, target, batch=None):
+        self.bindings.add(target)
+        if self not in target.controls:
+            target.add_control(self)
+        for control in self.controls:
+            control.bind(target)
+
+    def unbind(self, target):
+        if isinstance(target, ServerClass):
+            del self.server_tasks[target]
+            for probe in self.probes:
+                probe.unbind(target)
+        elif isinstance(target, SchedulerClass):
+            self.schedulers.discard(target)
+            while self in target.controls:
+                target.controls.remove(self)
+
+    def __del__(self):
+        self.controls.clear()
+
+
+class LatinSquareControl(Control):
+    """Latin Square Scheduler Control
+    """
+    from configure import LatinSquareScheduler
+    from enum import IntEnum
+    class States(IntEnum):
+        blocked = -2
+        terminated = -1
+        server_enqueued = 0
+        server_ready = 1
+        server_executing_task = 2
+        task_finished = 3
+    states = States
+    logger = logging.getLogger('computer.Control.LatinSquareControl')
+    def __init__(self, simulation, task, batch_control=None):
+        super(LatinSquareControl, self).__init__(simulation)
+        self.creation_time = self.simulation.time
+        self.server_arrival_times = {}
+        self.server_queue_lengths = {}
+        self.target_states = {}
+        self.task = task
+        self.batch_control = batch_control
+        self.logger.debug(f'Task: {task.id} bound to Control: {self.id}. Simulation time: {self.simulation.time}.')
+
+    @property
+    def control_state(self):
+        if len(self.target_states) > 0:
+            state = max(self.target_states, key=lambda key: self.target_states[key])
+            return self.target_states[state]
+        else:
+            return 0
+        
+    @property
+    def enqueued(self):
+        return self.control_state >= self.states.server_executing_task
+
+    @Control.cleanup_control
+    def control(self, target):
+        if isinstance(target, ServerClass):
+            self.server_control(target)
+        elif isinstance(target, SchedulerClass):
+            self.scheduler_control(target)
+
+    @LatinSquareScheduler.Server.Control.server_control_select
+    def server_control(self,target):
+        pass
+
+    @LatinSquareScheduler.Scheduler.Enqueuing.enqueue_task
+    def server_enqueue_task(self,target):
+        pass
+
+    @LatinSquareScheduler.Scheduler.Control.scheduler_control_select
+    def scheduler_control(self,target):
+        pass
+
+    def bind(self,target):
+        if isinstance(target, ServerClass):
+            self.bind_server(target)
+        elif isinstance(target, SchedulerClass):
+            self.bind_scheduler(target)
+    
+    def bind_server(self, target):
+        if self not in target.controls:
+            target.add_control(self)
+            self.bindings.add(target)
+            self.target_states[target] = self.states.server_enqueued
+            self.server_arrival_times[target] = self.simulation.time
+            self.server_queue_lengths[target] = len(target.tasks)
+            self.logger.debug(
+                f'Server: {target.id} bound to LatinSquare Control: {self.id}, for task {self.task.id}. Registering arrival time {self.simulation.time}. Simulation time: { self.simulation.time}.'
+            )   
+
+    def bind_scheduler(self, target):
+        if self not in target.controls:
+            target.add_control(self)
+            self.bindings.add(target)
+            self.target_states[target] = self.states.server_enqueued
+            self.logger.debug(f'Scheduler bound to LatinSquare Control: {self.id}, for task: {self.task.id}. Simulation Time: {self.simulation.time}.')
+
+    def unbind(self, target):
+        """Remove controls from targets control list."""
+        self.logger.debug(f'Unbinding, {target}: {target.id}, from Sparrow Probe: {self.id}. Simulation Time: {self.simulation.time}')
+        self.bindings.discard(target)
+        self.target_states[target] = self.states.terminated
+        while self in target.controls:
+            target.controls.remove(self)
+
+    def __del__(self):
+        targets = [target for target in self.bindings]
+        for target in targets:
+            self.unbind(target)
 
 
 class SparrowBatch(Control):
@@ -37,18 +185,7 @@ class SparrowBatch(Control):
         self.probes = set(SparrowProbe(simulation, task, batch_control=self) for task in batch)
         self.logger.debug(f'Probes in batch: {[probe for probe in self.probes]}. Simulation time: {self.simulation.time}.')
 
-    @staticmethod
-    def cleanup_control(fn):
-        def func(*args):
-            control = args[0]
-            fn(*args)
-            target = args[1]
-            if target in control.bindings and control not in target.controls:
-                control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
-                target.add_control(control)
-        return func
-
-    @cleanup_control
+    @Control.cleanup_control
     def control(self, target):
         pass
     
@@ -80,7 +217,6 @@ class SparrowBatch(Control):
 
     def __del__(self):
         self.probes.clear()
-
 
 class SparrowProbe(Control):
     """Sparrow Scheduler Probe"""
@@ -127,19 +263,8 @@ class SparrowProbe(Control):
     @property
     def enqueued(self):
         return self.probe_state >= self.states['server_executing_task']
-    
-    @staticmethod
-    def cleanup_control(fn):
-        def func(*args):
-            probe = args[0]
-            fn(*args)
-            target = args[1]
-            if target in probe.bindings and probe not in target.controls:
-                probe.logger.debug(f'Probe: {probe.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {probe.simulation.time}')
-                target.add_control(probe)
-        return func
 
-    @cleanup_control
+    @Control.cleanup_control
     def control(self, target):
         """
         Target can be a server or a scheduler.

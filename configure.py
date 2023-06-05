@@ -59,11 +59,11 @@ class SchedulingPolicies:
                 case 'FullRepetition':
                     SchedulingPolicies.full_repetition(*args)
                     return fn(*args)
-                case 'LatinSquare':
-                    SchedulingPolicies.latin_square(*args)
-                    return fn(*args)
                 case 'Sparrow':
                     SparrowScheduler.Scheduler.Enqueuing.sparrow(*args)
+                    return fn(*args)
+                case 'LatinSquare':
+                    LatinSquareScheduler.Scheduler.Enqueuing.latin_square(*args)
                     return fn(*args)
         return func
     
@@ -87,6 +87,8 @@ class SchedulingPolicies:
             match policy:
                 case 'Sparrow':
                     SparrowScheduler.Scheduler.Enqueuing.schedule_batch(*args)
+                case 'LatinSquare':
+                    LatinSquareScheduler.Scheduler.Enqueuing.schedule_batch(*args)
                 case _:
                     SchedulingPolicies.schedule_batch(*args)
         return func
@@ -107,13 +109,16 @@ class ServerSelectionPolicies:
                 yield server
 
     def server_selection(fn):
-        def func(*args):
+        def func(*args): 
             cluster = args[0]
-            num_probes = int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
-            batch_size = int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE'])
             match cluster.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
                 case 'Sparrow':
-                    return ServerSelectionPolicies.random(cluster, num_probes*batch_size)
+                    num_probes = int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
+                    batch_size = int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE'])
+                    return ServerSelectionPolicies.random(cluster, num_probes)
+                case 'LatinSquare':
+                    num_tasks = int(cluster.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
+                    return ServerSelectionPolicies.random(cluster, num_tasks)
                 case _:
                     return ServerSelectionPolicies.cycle(cluster)
         return func
@@ -141,6 +146,8 @@ class BlockingPolicies:
             match scheduler.POLICY:
                 case 'Sparrow':
                     SparrowScheduler.Server.Queue.block(*args)
+                case 'LatinSquare':
+                    LatinSquareScheduler.Server.Queue.block(*args)
                 case _:
                     BlockingPolicies.infinite_queue(*args)
                     return fn(*args)
@@ -189,6 +196,8 @@ class ServerTaskExecutionPolicies:
             match server.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']:
                 case 'Sparrow':
                     SparrowScheduler.Server.Executor.task_complete(*args)
+                case 'LatinSquare':
+                    LatinSquareScheduler.Server.Executor.task_complete(*args)
                 case _:
                     ServerTaskExecutionPolicies.default_task_completion(*args)
         return func
@@ -212,8 +221,8 @@ class SchedulerTaskCompletionPolicies:
             match policy:
                 case 'Sparrow':
                     SparrowScheduler.Scheduler.Executor.task_complete(*args,**kwargs)
-                case 'SparrowBatch':
-                    SparrowScheduler.Scheduler.Executor.task_complete(*args,**kwargs)
+                case 'LatinSquare':
+                    LatinSquareScheduler.Scheduler.Executor.task_complete(*args, **kwargs)
                 case _:
                     SchedulerTaskCompletionPolicies.default_task_completion(*args)
         return func
@@ -228,7 +237,7 @@ class SparrowScheduler:
                 from computer.control import SparrowBatch
                 tasks = job.tasks
                 batch_size = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE'])
-                batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks))/batch_size)]
+                batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks)/batch_size))]
                 scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in batches for task in batch]}. Simulation Time: {scheduler.simulation.time}')
                 for batch in batches:
                     batch_control = SparrowBatch(scheduler.simulation, batch)
@@ -422,8 +431,8 @@ class SparrowScheduler:
                             probes_on_server = [control for control in server.controls if isinstance(control, SparrowProbe)]
                             earliest_probe = probe
                             if len(probes_on_server) > 0:
-                                probe = min(probes_on_server, key=lambda probe: probe.server_arrival_times[server])
-                                if probe.server_arrival_times[server] < probe.server_arrival_times[server]:
+                                early_probe = min(probes_on_server, key=lambda probe: probe.server_arrival_times[server])
+                                if early_probe.server_arrival_times[server] < probe.server_arrival_times[server]:
                                     earliest_probe = probe
                             if earliest_probe is probe:
                                 event = server.network.delay(
@@ -503,4 +512,307 @@ class SparrowScheduler:
                         SparrowScheduler.Server.Control.sampling_server_control(*args)
                     else:
                         SparrowScheduler.Server.Control.late_binding_server_control(*args)
+                return func
+            
+class LatinSquareScheduler:
+    class Scheduler:
+        class Enqueuing:
+            def latin_square(scheduler, job):
+                from numpy import array_split
+                from math import ceil
+                from computer.control import LatinSquareBatch
+                tasks = job.tasks
+                batch_size = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
+                batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks))/batch_size)]
+                scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in batches for task in batch]}. Simulation Time: {scheduler.simulation.time}')
+                for batch in batches:
+                    batch_control = LatinSquareBatch(scheduler.simulation, batch)
+                    batch_control.bind(scheduler)
+                    scheduler.schedule_batch(batch)
+
+            def schedule_batch(scheduler,batch):
+                """Enqueue batches of tasks scheduling"""
+                from computer.control import LatinSquareControl
+                from collections import deque
+                num_tasks = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
+                batch = deque(batch)
+                for i in range(num_tasks):
+                    if i >= num_tasks:
+                        break
+                    sequenced_batch = [task for task in batch]
+                    server = next(scheduler.servers)
+                    def schedule_batch(batch=sequenced_batch, server=server, scheduler=scheduler):
+                        for task in batch:
+                            control, = tuple(control for control in scheduler.controls if isinstance(control,LatinSquareControl) and control.task is task)
+                            control.bind(server)
+                        server.control()
+                    scheduler.simulation.event_queue.put(
+                        scheduler.cluster.network.delay(
+                            schedule_batch, logging_message=f'Send batch: {[task for task in sequenced_batch]} to be scheduled on server {server.id}. Simulation time: {scheduler.simulation.time}.'
+                        )
+                    )
+                    batch.rotate()
+
+            def batch_sampling_enqueue_task_notify(probe,server):
+                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                scheduler, = tuple(binding for binding in probe.bindings if isinstance(binding, SchedulerClass))
+                num_tasks = int(probe.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
+                batch_control = probe.batch_control
+                controls = [control for control in batch_control.controls]
+                ready_control_servers = {
+                    control: [binding for binding in probe.bindings if isinstance(binding, ServerClass) and control.target_states[binding]==control.states.server_ready]
+                    for control in controls
+                }
+                ready_controls = set(control for control in controls if len(ready_control_servers[control]) == num_tasks)
+                ready_servers = set(server for control in ready_control_servers for server in ready_control_servers[control])
+                if len(ready_controls) == num_tasks:
+                    server_queue_lengths = {server: 0 for server in ready_servers}
+                    for control in ready_controls:
+                        min_server = min(control.server_queue_lengths, key=lambda server: max(server_queue_lengths[server], control.server_queue_lengths[server]))
+                        scheduler.logger.debug(
+                            f'Scheduler has selected server: {server.id}, to enqueue task: {control.task.id}. Simulation time: {control.simulation.time}.'
+                        )
+                        def enqueue_task(server=min_server, control=control):
+                            control.target_states[server] = control.states.server_executing_task
+                            server.control()
+                        event = scheduler.cluster.network.delay(
+                            enqueue_task, logging_message=f'Send message to server: {server.id}, enqueue task: {control.task.id}. Simulation time: {server.simulation.time}.'
+                        )
+                        control.simulation.event_queue.put(
+                            event
+                        )
+                        queue_length = control.server_queue_lengths[min_server] + 1
+                        server_queue_lengths[min_server] = queue_length
+                        other_servers = [server for server in ready_servers if not server is min_server]
+                        for server in other_servers:
+                            scheduler.logger.debug(
+                                f'Scheduler has selected a different server to enqueue task: {control.task.id}. Simulation time: {control.simulation.time}.'
+                            )
+                            def unbind_control(server=server, control=control):
+                                control.target_states[server] = control.states.terminate
+                                server.control()
+                            scheduler.cluster.network.delay(
+                                unbind_control, logging_message=f'Send message to server: {server.id}, do not enqueue task: {control.task.id}. Simulation time: {server.simulation.time}.'
+                            )
+
+            def scheduler_enqueue_task_notify(control, server):
+                from computer.abstract_base_classes import SchedulerClass, ServerClass
+                scheduler, = tuple(binding for binding in control.bindings if isinstance(binding,SchedulerClass))
+                if not control.task.is_finished:
+                    scheduler.logger.debug(
+                        f'Scheduler has received response from LatinSquare control: {control.id}, for task: {control.task.id}, from server: {server.id}. '
+                        + f'Enqueuing task on server. Simulation time: {control.simulation.time}.'
+                    )
+                    def enqueue_task(server=server, control=control):
+                        server.control()
+                        control.target_states[server] = control.states.server_ready
+                        server.control()
+                    event = scheduler.cluster.network.delay(
+                        enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {control.task.id}. Simulation Time: {control.simulation.time}'
+                    )
+                    server.tasks[control.task] = event #Block subsequent controls. This will be overwritten by the server once the task is successfully enqueued.
+                    control.simulation.event_queue.put(
+                        event
+                    )
+                else:
+                    # control task is finished respond to server that task is done.
+                    scheduler.logger.debug(f'Task: {control.task.id} has already finished, informing server: {server.id}. Simulation Time: {control.simulation.time}')
+                    def unbind_control(control=control, server=server):
+                        control.target_states[server]=control.states.terminated
+                        server.control()
+                    event = server.network.delay(
+                        unbind_control, logging_message=f'Send message to server: {server.id}, task: {control.task.id} is finished. Simulation time: {server.simulation.time}'
+                    )
+                    server.tasks[control.task]=event
+                    control.simulation.event_queue.put(
+                        event
+                    )
+
+            def enqueue_task(fn):
+                    def func(*args):
+                        control = args[0]
+                        policy = control.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
+                        match policy:
+                            case 'LatinSquare':
+                                late_binding = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
+                                preemption = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['PREEMPTION']
+                                if late_binding.lower() == 'true':
+                                    LatinSquareScheduler.Scheduler.Enqueuing.scheduler_enqueue_task_notify(*args)
+                                else:
+                                    if preemption.lower() == 'true':
+                                        raise ValueError(f'LatinSquare sampling configuration does not support preemption.')
+                                    LatinSquareScheduler.Scheduler.Enqueuing.batch_sampling_enqueue_task_notify(*args)
+                            case _:
+                                fn(*args)
+                    return func
+
+        class Executor:
+            def task_complete(scheduler, task, server=None):
+                from computer.control import LatinSquareControl
+                server.logger.debug(
+                    f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
+                )
+                control, = tuple(control for control in scheduler.controls if isinstance(control, LatinSquareControl) and task is control.task)
+                control.target_states[scheduler] = control.states.task_finished
+                scheduler.control()
+
+        class Control:
+            def late_binding_scheduler_preemption(control, scheduler):
+                from computer.control import LatinSquareControl
+                from computer.abstract_base_classes import ServerClass
+                if isinstance(control, LatinSquareControl) and control.task.is_finished:
+                    bound_servers = set(binding for binding in control.bindings if isinstance(binding, ServerClass))
+                    for server in bound_servers:
+                        # if control.target_states[server] != control.states.server_executing_task:
+                        def preempt_task(server=server, control=control):
+                            control.target_states[server] = control.states.terminated
+                            try:
+                                del server.tasks[control.task] # Delete the currently associated event with this task.
+                            except KeyError:
+                                server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                            finally:
+                                server.control()
+                        scheduler.simulation.event_queue.put(
+                            scheduler.cluster.network.delay(
+                                preempt_task, logging_message=f'Preempt task: {control.task.id}, on server: {server.id}. Simulation time: {scheduler.simulation.time}.'
+                            )
+                        )
+
+
+            def scheduler_control_select(fn):
+                def func(*args):
+                    control = args[0]
+                    late_binding = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
+                    preemption = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['PREEMPTION']
+                    if preemption.lower() == 'true' and late_binding.lower() == 'true':
+                        LatinSquareScheduler.Scheduler.Control.late_binding_scheduler_preemption(*args)
+                return func
+    class Server:
+        class Queue:
+           def block(scheduler, task, server):
+                """LatinSquare will block all task scheduling requests. 
+                Instead task scheduling is handled by control signals in the LatinSquareControls."""
+                from computer.control import LatinSquareControl
+                try:
+                    control, = tuple(control for control in scheduler.controls if isinstance(control, LatinSquareControl) and control.task is task)
+                except ValueError:
+                    # New Control.
+                    control = LatinSquareControl(scheduler.simulation, task)
+                    control.bind(scheduler)
+                else:
+                    # Control already bound to scheduler.
+                    pass
+                finally:
+                    # Control already bound to scheduler.
+                    control.bind(server)
+                if server.busy_until == scheduler.simulation.time:
+                    server.control()
+                    
+        class Executor:
+            def task_complete(server, task):
+                """LatinSquare tasks are scheduled by RPC. So after
+                tasks complete on the server, the server needs to enter the control loop.
+                """
+                from computer.control import LatinSquareControl
+                try:
+                    control, = tuple(control for control in server.controls if isinstance(control, LatinSquareControl) and task is control.task)
+                except ValueError:
+                    server.logger.debug(f'Task: {task.id}, preempted on server: {server.id}. Simulation time: {server.simulation.time}.')
+                else:
+                    control.target_states[server] = control.states.task_finished
+                finally:
+                    server.control()
+
+        class Control:
+            def late_binding_server_control(control, target):
+                from computer.control import LatinSquareControl
+                server = target
+                match control.target_states[server]:
+                    case control.states.blocked:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.blocked}, simulation time: {control.simulation.time}.')
+                    case control.states.server_enqueued:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_enqueued}, simulation time: {control.simulation.time}')
+                        if server.busy_until == server.simulation.time:
+                            controls_on_server = [control for control in server.controls if isinstance(control, LatinSquareControl)]
+                            earliest_control = control
+                            if len(controls_on_server) > 0:
+                                min_control = min(controls_on_server, key=lambda control: control.server_arrival_times[server])
+                                if earliest_control.server_arrival_times[server] < min_control.server_arrival_times[server]:
+                                    earliest_control = min_control
+                            if earliest_control is control:
+                                event = server.network.delay(
+                                    control.server_enqueue_task, server, logging_message=f'Send message to control, ready to enqueue task: {control.task.id} on server {server.id}. Simulation Time: {control.simulation.time}'
+                                )
+                                server.tasks[control.task] = event #Block subsequent controls. This will be overwritten by the server once the task is successfully enqueued.
+                                control.simulation.event_queue.put(
+                                    event
+                                )
+                                control.target_states[server] = control.states.blocked #Block subsequent controls until scheduler response.
+                    case control.states.server_ready:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_ready}, simulation time: {control.simulation.time}')
+                        if server.busy_until == control.simulation.time:
+                            event = server.enqueue_task(control.task)
+                            server.tasks[control.task] = event
+                            control.simulation.event_queue.put(
+                                event
+                            )
+                            control.target_states[server] = control.states.server_executing_task
+                    case control.states.server_executing_task:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_executing_task}, simulation time: {control.simulation.time}')
+                    case control.states.task_finished:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.task_finished}, simulation time: {control.simulation.time}')
+                        control.unbind(server)
+                    case control.states.terminated:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.terminated}, simulation time: {control.simulation.time}')
+                        control.unbind(server)
+
+            def sampling_server_control(control, target):
+                server = target
+                match control.target_states[server]:
+                    case control.states.blocked:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state{ control.states.blocked}, simulation time: {control.simulation.time}.')
+                    case control.states.server_enqueued:
+                        # Server control needs to be idempotent.
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_enqueued}, simulation time: {control.simulation.time}')
+                        def update_control(control=control, server=server):
+                            server.logger.debug(f'Update server: {server.id}, to state: {control.states.server_ready}, for task {control.task.id}. Simulation time: {control.simulation.time}.')
+                            control.target_states[server] = control.states.server_ready
+                            control.server_enqueue_task(server)
+                        event = server.network.delay(
+                            update_control, logging_message=f'Notify control, that server: {server.id} is ready for task: {control.task.id}.'
+                        )
+                        control.simulation.event_queue.put(
+                            event
+                        )
+                        control.target_states[server] = control.states.blocked
+                    case control.states.server_ready:
+                        # Server control blocks in ready state until notified by control.
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_ready}, simulation time: {control.simulation.time}.')
+                    case control.states.server_executing_task:
+                        if server.busy_until == control.simulation.time:
+                            # If the server is currently idle.
+                            control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_executing_task}, simulation time: {control.simulation.time}')
+                            event = server.enqueue_task(control.task)
+                            server.tasks[control.task] = event
+                            control.simulation.event_queue.put(
+                                event
+                            )
+                            control.target_states[server] = control.states.task_finished 
+                    case control.states.task_finished:
+                        if server.busy_until == control.simulation.time:
+                            # If the server is currently idle.
+                            control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.task_finished}, simulation time: {control.simulation.time}')
+                            control.unbind(server)
+                    case control.states.terminated:
+                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.terminated}, simulation time: {control.simulation.time}')
+                        control.unbind(server)    
+
+            def server_control_select(fn):
+                def func(*args):
+                    control = args[0]
+                    late_binding = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
+                    if late_binding.lower() == 'false':
+                        LatinSquareScheduler.Server.Control.sampling_server_control(*args)
+                    else:
+                        LatinSquareScheduler.Server.Control.late_binding_server_control(*args)
                 return func
