@@ -667,9 +667,12 @@ class LatinSquareScheduler:
                         def preempt_task(server=server, control=control):
                             control.target_states[server] = control.states.terminated
                             try:
-                                del server.tasks[control.task] # Delete the currently associated event with this task.
+                                event = server.tasks.pop(control.task)
                             except KeyError:
                                 server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                            else:
+                                server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
+                                event.cancel()
                             finally:
                                 server.control()
                         scheduler.simulation.event_queue.put(
