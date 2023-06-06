@@ -188,7 +188,7 @@ class ServerTaskExecutionPolicies:
                         server.simulation.event_queue.put(
                             new_event
                         )
-                        server.tasks[task] = new_event
+                        server.start_task_event(task, new_event)
 
     def task_completion(fn):
         def func(*args):
@@ -329,7 +329,7 @@ class SparrowScheduler:
                     event = server.network.delay(
                         unbind_probe, logging_message=f'Send message to server: {server.id}, task: {probe.task.id} is finished. Simulation time: {server.simulation.time}'
                     )
-                    server.tasks[probe.task]=event
+                    server.start_task_event(probe.task, event)
                     probe.simulation.event_queue.put(
                         event
                     )
@@ -344,7 +344,7 @@ class SparrowScheduler:
                     event = scheduler.cluster.network.delay(
                         enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {probe.task.id}. Simulation Time: {probe.simulation.time}'
                     )
-                    server.tasks[probe.task] = event #Block subsequent probes. This will be overwritten by the server once the task is successfully enqueued.
+                    server.start_task_event(probe.task, event) # Block server execution loop.
                     probe.simulation.event_queue.put(
                         event
                     )
@@ -368,7 +368,7 @@ class SparrowScheduler:
                     event = scheduler.cluster.network.delay(
                         unbind_probe, logging_message=f'Send Message to Server: {server.id} do not enqueue task: {probe.task.id}. Simulation Time: {probe.simulation.time}'
                     )
-                    server.tasks[probe.task]=event
+                    server.start_task_event(probe.task, event) # Block server execution loop.
                     probe.simulation.event_queue.put(
                         event
                     )
@@ -462,7 +462,7 @@ class SparrowScheduler:
                                 event = server.network.delay(
                                     probe.server_enqueue_task, server, logging_message=f'Send message to probe, ready to enqueue task: {probe.task.id} on server {server.id}. Simulation Time: {probe.simulation.time}'
                                 )
-                                server.tasks[probe.task] = event #Block subsequent probes. This will be overwritten by the server once the task is successfully enqueued.
+                                server.start_task_event(probe.task, event) # Block server execution loop.
                                 probe.target_states[target] = probe.states.server_ready
                                 probe.simulation.event_queue.put(
                                     event
@@ -472,7 +472,6 @@ class SparrowScheduler:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_ready}, simulation time: {probe.simulation.time}')
                         if server.busy_until == probe.simulation.time:
                             event = server.enqueue_task(probe.task)
-                            server.tasks[probe.task] = event
                             probe.simulation.event_queue.put(
                                 event
                             )
@@ -482,10 +481,26 @@ class SparrowScheduler:
                         pass
                     case probe.states.task_finished:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.task_finished}, simulation time: {probe.simulation.time}')
-                        probe.unbind(server)
+                        try:
+                            server.stop_task_event(probe.task)
+                        except KeyError:
+                            pass
+                        else:
+                            pass
+                        finally:
+                            probe.unbind(server)
+                            server.control()
                     case probe.states.terminated:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.terminated}, simulation time: {probe.simulation.time}')
-                        probe.unbind(server)
+                        try:
+                            server.stop_task_event(probe.task)
+                        except KeyError:
+                            pass
+                        else:
+                            pass
+                        finally:
+                            probe.unbind(server)
+                            server.control()
 
             def sampling_server_control(probe, target):
                 server = target
@@ -514,7 +529,6 @@ class SparrowScheduler:
                             # If the server is currently idle.
                             probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_executing_task}, simulation time: {probe.simulation.time}')
                             event = server.enqueue_task(probe.task)
-                            server.tasks[probe.task] = event
                             probe.simulation.event_queue.put(
                                 event
                             )
@@ -523,10 +537,24 @@ class SparrowScheduler:
                         if server.busy_until == probe.simulation.time:
                             # If the server is currently idle.
                             probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.task_finished}, simulation time: {probe.simulation.time}')
-                            probe.unbind(server)
+                            try:
+                                server.stop_task_event(probe.task)
+                            except KeyError:
+                                pass
+                            else:
+                                pass
+                            finally:
+                                probe.unbind(server)
                     case probe.states.terminated:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.terminated}, simulation time: {probe.simulation.time}')
-                        probe.unbind(server)        
+                        try:
+                            server.stop_task_event(probe.task)
+                        except KeyError:
+                            pass
+                        else:
+                            pass
+                        finally:
+                            probe.unbind(server)        
 
             def server_control_select(fn):
                 def func(*args):
@@ -640,13 +668,13 @@ class LatinSquareScheduler:
                         + f'Enqueuing task on server. Simulation time: {control.simulation.time}.'
                     )
                     def enqueue_task(server=server, control=control):
-                        server.control()
+                        # server.control()
                         control.target_states[server] = control.states.server_ready
                         server.control()
                     event = scheduler.cluster.network.delay(
                         enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {control.task.id}. Simulation Time: {control.simulation.time}'
                     )
-                    server.tasks[control.task] = event #Block subsequent controls. This will be overwritten by the server once the task is successfully enqueued.
+                    server.start_task_event(control.task, event) # block server execution loop
                     control.simulation.event_queue.put(
                         event
                     )
@@ -659,7 +687,7 @@ class LatinSquareScheduler:
                     event = server.network.delay(
                         unbind_control, logging_message=f'Send message to server: {server.id}, task: {control.task.id} is finished. Simulation time: {server.simulation.time}'
                     )
-                    server.tasks[control.task]=event
+                    server.start_task_event(control.task, event) # block until network has finished responding.
                     control.simulation.event_queue.put(
                         event
                     )
@@ -710,12 +738,11 @@ class LatinSquareScheduler:
                         def preempt_task(server=server, control=control):
                             control.target_states[server] = control.states.terminated
                             try:
-                                event = server.tasks.pop(control.task)
+                                server.stop_task_event(control.task)
                             except KeyError:
                                 server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
                             else:
                                 server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
-                                event.cancel()
                             finally:
                                 server.control()
                         scheduler.simulation.event_queue.put(
@@ -755,6 +782,7 @@ class LatinSquareScheduler:
                     # Control already bound to scheduler.
                     control.bind(server)
                 if server.busy_until == scheduler.simulation.time:
+                    server.logger.debug(f'Server currently idle, respond to control instantly.')
                     server.control()
                     
         class Executor:
@@ -772,6 +800,7 @@ class LatinSquareScheduler:
                     server.logger.debug(f'Task: {task.id}, preempted on server: {server.id}. Simulation time: {server.simulation.time}.')
                 else:
                     control.target_states[server] = control.states.task_finished
+                    # server.stop_task_event(control.task)
                 finally:
                     server.control()
 
@@ -796,9 +825,9 @@ class LatinSquareScheduler:
                                     earliest_control = min_control
                             if earliest_control is control:
                                 event = server.network.delay(
-                                    control.server_enqueue_task, server, logging_message=f'Send message to control, ready to enqueue task: {control.task.id} on server {server.id}. Simulation Time: {control.simulation.time}'
+                                    control.server_enqueue_task, server, logging_message=f'Send message to scheduler, ready to enqueue task: {control.task.id} on server {server.id}. Simulation Time: {control.simulation.time}'
                                 )
-                                server.tasks[control.task] = event #Block subsequent controls. This will be overwritten by the server once the task is successfully enqueued.
+                                server.start_task_event(control.task, event) #Block execution loop of server.
                                 control.simulation.event_queue.put(
                                     event
                                 )
@@ -807,7 +836,6 @@ class LatinSquareScheduler:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_ready}, simulation time: {control.simulation.time}')
                         if server.busy_until == control.simulation.time:
                             event = server.enqueue_task(control.task)
-                            server.tasks[control.task] = event
                             control.simulation.event_queue.put(
                                 event
                             )
@@ -816,10 +844,29 @@ class LatinSquareScheduler:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_executing_task}, simulation time: {control.simulation.time}')
                     case control.states.task_finished:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.task_finished}, simulation time: {control.simulation.time}')
-                        control.unbind(server)
+                        try:
+                            server.stop_task_event(control.task)
+                        except KeyError:
+                            # server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                            pass
+                        else:
+                            pass
+                        finally:
+                            control.unbind(server)
+                            server.control()
                     case control.states.terminated:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.terminated}, simulation time: {control.simulation.time}')
-                        control.unbind(server)
+                        try:
+                            server.stop_task_event(control.task)
+                        except KeyError:
+                            # server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                            pass
+                        else:
+                            # server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
+                            pass
+                        finally:
+                            control.unbind(server)
+                            server.control()
 
             def sampling_server_control(control, target):
                 server = target
@@ -848,7 +895,6 @@ class LatinSquareScheduler:
                             # If the server is currently idle.
                             control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_executing_task}, simulation time: {control.simulation.time}')
                             event = server.enqueue_task(control.task)
-                            server.tasks[control.task] = event
                             control.simulation.event_queue.put(
                                 event
                             )
@@ -857,10 +903,24 @@ class LatinSquareScheduler:
                         if server.busy_until == control.simulation.time:
                             # If the server is currently idle.
                             control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.task_finished}, simulation time: {control.simulation.time}')
-                            control.unbind(server)
+                            try:
+                                server.stop_task_event(control.task)
+                            except KeyError:
+                                server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                            else:
+                                pass
+                            finally:
+                                control.unbind(server)
                     case control.states.terminated:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.terminated}, simulation time: {control.simulation.time}')
-                        control.unbind(server)    
+                        try:
+                            server.stop_task_event(control.task)
+                        except KeyError:
+                            server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                        else:
+                            pass
+                        finally:
+                            control.unbind(server)    
 
             def server_control_select(fn):
                 def func(*args):

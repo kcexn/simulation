@@ -21,7 +21,7 @@ class Control(object):
             fn(*args)
             target = args[1]
             if target in control.bindings and control not in target.controls:
-                control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
+                # control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
                 target.add_control(control)
         return func
 

@@ -32,6 +32,11 @@ class Server(ServerClass):
         self.completion_process = CompletionProcess(simulation)
         self.max_queue_length = int(simulation.CONFIGURATION['Computer.Cluster.Server']['MAX_QUEUE_LENGTH'])
         self.controls = deque()
+        self.idle_time_triggers = {'idle_start_time': 0, 'idle_stop_time': 0}
+        self.idle_start_times = set()
+        self.idle_stop_times = set()
+        self.cumulative_idle_time = 0
+        self.cumulative_busy_time = 0
 
     @property
     def busy_until(self):
@@ -54,6 +59,37 @@ class Server(ServerClass):
     @property
     def id(self):
         return id(self)
+    
+    def start_task_event(self, task, event):
+        """Stop idling.
+        """
+        if self.busy_until == self.simulation.time:
+            self.tasks[task] = event
+            idle_start_time = self.idle_time_triggers['idle_start_time']
+            idle_stop_time = self.idle_time_triggers['idle_stop_time']
+            if idle_start_time >= idle_stop_time and self.simulation.time >= idle_start_time:
+                self.cumulative_idle_time += self.simulation.time - idle_start_time
+                self.idle_time_triggers['idle_stop_time'] = self.simulation.time
+                self.idle_stop_times.add(self.simulation.time)
+
+
+    def stop_task_event(self,task):
+        """Start Idling
+        """
+        try:
+            event = self.tasks.pop(task)
+        except KeyError:
+            raise KeyError(f'Task: {task.id}, is not in server tasks.')
+        else:
+            event.cancel()
+        finally:
+            idle_start_time = self.idle_time_triggers['idle_start_time']
+            idle_stop_time = self.idle_time_triggers['idle_stop_time']
+            if idle_start_time <= idle_stop_time and self.simulation.time >= idle_stop_time:
+                self.cumulative_busy_time += self.simulation.time - idle_stop_time
+                self.idle_time_triggers ['idle_start_time'] = self.simulation.time
+                self.idle_start_times.add(self.simulation.time)
+
 
     def add_control(self, control):
         self.controls.append(control)
@@ -70,7 +106,7 @@ class Server(ServerClass):
     def enqueue_task(self, task):
         offset = self.busy_until - self.simulation.time
         event = self.completion_process.get_task_completion(task, offset=offset, server=self)
-        self.tasks[task] = event
+        self.start_task_event(task,event)
         self.logger.debug(f'completion time for task, {task.id}, is {event.arrival_time}, executing on server: {self.id}')
         return event
 

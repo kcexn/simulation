@@ -48,7 +48,7 @@ class Simulation(object):
 __all__ = ['Simulation']
 
 if __name__ == '__main__':
-    logging.basicConfig(filename='logging.log', filemode='w', level='INFO')
+    logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
     simulation = Simulation()
     simulation.run()
     unfinished_jobs = [job for job in simulation.work if job.__class__ == Job and not job.is_finished]
@@ -59,18 +59,11 @@ if __name__ == '__main__':
         [job.start_time, job.finish_time, len(job.tasks), job.finish_time-job.start_time] for 
         job in jobs
     ]
-    # task_data = [
-    #     [task.start_time, task.finish_time, task.finish_time - task.start_time] for job in jobs for task in job.tasks
-    # ]
+
     with open('sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')
         writer.writerow(['start time', 'finish time', 'num tasks', 'job latency'])
         writer.writerows(sim_data)
-
-    # with open('task_data.csv','w', newline='') as f:
-    #     writer = csv.writer(f, dialect='excel')
-    #     writer.writerow(['start time', 'finish time', 'task latency'])
-    #     writer.writerows(task_data)
 
     latencies = [data[3] for data in sim_data]
     start_time = sim_data[0][0]
@@ -80,6 +73,11 @@ if __name__ == '__main__':
         task.finish_time - task.start_time for job in jobs for task in job.tasks
     ]
     avg_task_latency = sum(task_latencies)/len(task_latencies)
+
+    server_cum_times = [[server.cumulative_idle_time, server.cumulative_busy_time] for server in simulation.scheduler.cluster.servers]
+    print(server_cum_times)
+    print(f'{[server.idle_time_triggers["idle_start_time"] for server in simulation.scheduler.cluster.servers]}')
+    print(f'{[[times[0]/sum(times), times[1]/sum(times)] for times in server_cum_times]}')
 
     print(f'Average Job Latency: {sum(latencies)/simulation.NUM_JOBS}')
     print(f'Average Task Latency: {avg_task_latency}')
