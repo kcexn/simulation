@@ -75,9 +75,11 @@ class LatinSquareBatch(Control):
             for probe in self.probes:
                 probe.unbind(target)
         elif isinstance(target, SchedulerClass):
-            self.schedulers.discard(target)
-            while self in target.controls:
-                target.controls.remove(self)
+            completed_tasks = [control.task.is_finished for control in self.controls]
+            if False not in completed_tasks:
+                self.bindings.discard(target)
+                while self in target.controls:
+                    target.controls.remove(self)
 
     def __del__(self):
         self.controls.clear()
@@ -139,7 +141,12 @@ class LatinSquareControl(Control):
 
     @LatinSquareScheduler.Scheduler.Control.scheduler_control_select
     def scheduler_control(self,target):
-        pass
+        if len(self.bindings) == 1 and self.task.is_finished:
+            binding = self.bindings.pop()
+            if binding is target:
+                self.unbind(target)
+            else:
+                self.bindings.add(binding)
 
     def bind(self,target):
         if isinstance(target, ServerClass):
@@ -167,11 +174,14 @@ class LatinSquareControl(Control):
 
     def unbind(self, target):
         """Remove controls from targets control list."""
-        self.logger.debug(f'Unbinding, {target}: {target.id}, from Sparrow Probe: {self.id}. Simulation Time: {self.simulation.time}')
+        self.logger.debug(f'Unbinding, {target}: {target.id}, from LatinSquare Control: {self.id}. Simulation Time: {self.simulation.time}')
         self.bindings.discard(target)
         self.target_states[target] = self.states.terminated
         while self in target.controls:
             target.controls.remove(self)
+        if len(self.bindings) == 0 and isinstance(target, SchedulerClass):
+            self.batch_control.unbind(target)
+
 
     def __del__(self):
         targets = [target for target in self.bindings]
@@ -286,45 +296,7 @@ class SparrowProbe(Control):
 
     @SparrowScheduler.Server.Control.server_control_select
     def server_control(self, target):
-        server = target
-        match self.target_states[server]:
-            case self.states.server_probed:
-                self.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {self.id}, state: {self.states.server_probed}, simulation time: {self.simulation.time}')
-                if server.busy_until == server.simulation.time:
-                    probes_on_server = [control for control in server.controls if isinstance(control, SparrowProbe)]
-                    earliest_probe = self
-                    if len(probes_on_server) > 0:
-                        probe = min(probes_on_server, key=lambda probe: probe.server_arrival_times[server])
-                        if probe.server_arrival_times[server] < self.server_arrival_times[server]:
-                            earliest_probe = probe
-                    if earliest_probe is self:
-                        event = server.network.delay(
-                            self.server_enqueue_task, server, logging_message=f'Send message to scheduler, ready to enqueue task: {self.task.id} on server {server.id}. Simulation Time: {self.simulation.time}'
-                        )
-                        server.tasks[self.task] = event #Block subsequent probes. This will be overwritten by the server once the task is successfully enqueued.
-                        self.target_states[target] = self.states.server_ready
-                        self.simulation.event_queue.put(
-                            event
-                        )
-                        self.target_states[server] = self.states.server_ready
-            case self.states.server_ready:
-                self.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {self.id}, state: {self.states.server_ready}, simulation time: {self.simulation.time}')
-                if server.busy_until == self.simulation.time:
-                    event = server.enqueue_task(self.task)
-                    server.tasks[self.task] = event
-                    self.simulation.event_queue.put(
-                        event
-                    )
-                    self.target_states[server] = self.states.server_executing_task
-            case self.states.server_executing_task:
-                self.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {self.id}, state: {self.states.server_executing_task}, simulation time: {self.simulation.time}')
-                pass
-            case self.states.task_finished:
-                self.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {self.id}, state: {self.states.task_finished}, simulation time: {self.simulation.time}')
-                self.unbind(server)
-            case self.states.terminated:
-                self.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {self.id}, state: {self.states.terminated}, simulation time: {self.simulation.time}')
-                self.unbind(server)
+        pass
 
     def scheduler_control(self, target):
         pass

@@ -1,4 +1,6 @@
 import configparser
+import cProfile
+import pstats
 
 def latin_square(n):
     return [[(i+j)%n for i in range(n)] for j in range(n)]
@@ -239,32 +241,50 @@ class SparrowScheduler:
                 else:
                     from .computer.control import SparrowBatch
                 tasks = job.tasks
-                batch_size = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE'])
-                batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks)/batch_size))]
-                scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in batches for task in batch]}. Simulation Time: {scheduler.simulation.time}')
-                for batch in batches:
-                    batch_control = SparrowBatch(scheduler.simulation, batch)
-                    batch_control.bind(scheduler)
-                    scheduler.schedule_batch(batch)
+                try:
+                    scheduler_enqueuing_params = scheduler.scheduler_enqueuing_params
+                except AttributeError:
+                    scheduler_enqueuing_params = {
+                        'batch_size': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE']),
+                        'num_probes': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
+                    }
+                    scheduler.scheduler_enqueuing_params = scheduler_enqueuing_params
+                else:
+                    pass
+                finally:
+                    batch_size = scheduler_enqueuing_params['batch_size']
+                    batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,ceil(len(tasks)/batch_size))]
+                    scheduler.logger.info(f'Work batches to be scheduled are {[(task.id, task.start_time) for batch in batches for task in batch]}. Simulation Time: {scheduler.simulation.time}')
+                    for batch in batches:
+                        batch_control = SparrowBatch(scheduler.simulation, batch)
+                        batch_control.bind(scheduler)
+                        scheduler.schedule_batch(batch)
 
             def schedule_batch(scheduler,batch):
                 """Enqueue batches of tasks scheduling"""
-                if not __package__:
-                    from computer.control import SparrowProbe
+                try:
+                    scheduler_enqueuing_params = scheduler.scheduler_enqueuing_params
+                except AttributeError:
+                    scheduler_enqueuing_params = {
+                        'batch_size': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE']),
+                        'num_probes': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
+                    }
+                    scheduler.scheduler_enqueuing_params = scheduler_enqueuing_params
                 else:
-                    from .computer.control import SparrowProbe
-                num_probes = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
-                for idx,server in enumerate(scheduler.servers):
-                    if idx >= num_probes:
-                        break
-                    for task in batch:
-                        def schedule_task(task=task, server=server, scheduler=scheduler):
-                            probe, = tuple(probe for probe in scheduler.controls if isinstance(probe,SparrowProbe) and probe.task is task)
-                            probe.bind(server)
+                    pass
+                finally:
+                    num_probes = scheduler_enqueuing_params['num_probes']
+                    for idx,server in enumerate(scheduler.servers):
+                        if idx >= num_probes:
+                            break
+                        probes = [probe for probe in scheduler.controls if probe.__class__.__name__ == 'SparrowProbe' and probe.task in batch]
+                        def schedule_tasks(server=server, probes=probes):
+                            for probe in probes:
+                                probe.bind(server)
                             server.control()
                         scheduler.simulation.event_queue.put(
                             scheduler.cluster.network.delay(
-                                schedule_task, logging_message=f'Send task: {task.id} to be scheduled on server {server.id}. Simulation time: {scheduler.simulation.time}.'
+                                schedule_tasks, logging_message=f'Send batch: {[task for task in batch]} to be scheduled on server {server.id}. Simulation time: {scheduler.simulation.time}.'
                             )
                         )
 
@@ -379,30 +399,36 @@ class SparrowScheduler:
                     policy = probe.simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
                     match policy:
                         case 'Sparrow':
-                            late_binding = probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['LATE_BINDING']
-                            preemption = probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['PREEMPTION']
-                            if late_binding.lower() == 'true':
-                                SparrowScheduler.Scheduler.Enqueuing.scheduler_enqueue_task_notify(*args)
+                            try:
+                                scheduler_params = probe.simulation.scheduler_params
+                            except AttributeError:
+                                scheduler_params = {
+                                    'late_binding': probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['LATE_BINDING'],
+                                    'preemption': probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['PREEMPTION']
+                                }
+                                probe.simulation.scheduler_params = scheduler_params
                             else:
-                                if preemption.lower() == 'true':
-                                    raise ValueError(f'Sparrow sampling configuration does not support preemption.')
-                                SparrowScheduler.Scheduler.Enqueuing.batch_sampling_enqueue_task_notify(*args)
+                                pass
+                            finally:
+                                late_binding = scheduler_params['late_binding']
+                                preemption = scheduler_params['preemption']
+                                if late_binding.lower() == 'true':
+                                    SparrowScheduler.Scheduler.Enqueuing.scheduler_enqueue_task_notify(*args)
+                                else:
+                                    if preemption.lower() == 'true':
+                                        raise ValueError(f'Sparrow sampling configuration does not support preemption.')
+                                    SparrowScheduler.Scheduler.Enqueuing.batch_sampling_enqueue_task_notify(*args)
                         case _:
                             fn(*args)
                 return func
 
         class Executor:
             def task_complete(scheduler, task, server=None):
-                if not __package__:
-                    from computer.control import SparrowProbe
-                else:
-                    from .computer.control import SparrowProbe
                 server.logger.debug(
                     f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
                 )
-                probe, = tuple(control for control in scheduler.controls if isinstance(control, SparrowProbe) and task is control.task)
+                probe, = tuple(control for control in scheduler.controls if control.__class__.__name__ == 'SparrowProbe' and task is control.task)
                 probe.target_states[scheduler] = probe.states.task_finished
-                scheduler.control()
 
     class Server:
         class Queue:
@@ -443,21 +469,17 @@ class SparrowScheduler:
 
         class Control:
             def late_binding_server_control(probe, target):
-                if not __package__:
-                    from computer.control import SparrowProbe
-                else:
-                    from .computer.control import SparrowProbe
                 server = target
                 match probe.target_states[server]:
                     case probe.states.server_probed:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_probed}, simulation time: {probe.simulation.time}')
                         if server.busy_until == server.simulation.time:
-                            probes_on_server = [control for control in server.controls if isinstance(control, SparrowProbe)]
+                            probes_on_server = [control for control in server.controls if control.__class__.__name__ == 'SparrowProbe']
                             earliest_probe = probe
                             if len(probes_on_server) > 0:
                                 early_probe = min(probes_on_server, key=lambda probe: probe.server_arrival_times[server])
                                 if early_probe.server_arrival_times[server] < probe.server_arrival_times[server]:
-                                    earliest_probe = probe
+                                    earliest_probe = early_probe
                             if earliest_probe is probe:
                                 event = server.network.delay(
                                     probe.server_enqueue_task, server, logging_message=f'Send message to probe, ready to enqueue task: {probe.task.id} on server {server.id}. Simulation Time: {probe.simulation.time}'
@@ -467,7 +489,6 @@ class SparrowScheduler:
                                 probe.simulation.event_queue.put(
                                     event
                                 )
-                                probe.target_states[server] = probe.states.server_ready
                     case probe.states.server_ready:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_ready}, simulation time: {probe.simulation.time}')
                         if server.busy_until == probe.simulation.time:
@@ -567,6 +588,7 @@ class SparrowScheduler:
                 return func
             
 class LatinSquareScheduler:
+
     class Scheduler:
         class Enqueuing:
             def latin_square(scheduler, job):
@@ -657,26 +679,11 @@ class LatinSquareScheduler:
                     from computer.abstract_base_classes import SchedulerClass
                 else:
                     from .computer.abstract_base_classes import SchedulerClass
-                scheduler, = tuple(binding for binding in control.bindings if isinstance(binding,SchedulerClass))
-                if not control.task.is_finished:
-                    scheduler.logger.debug(
-                        f'Scheduler has received response from LatinSquare control: {control.id}, for task: {control.task.id}, from server: {server.id}. '
-                        + f'Enqueuing task on server. Simulation time: {control.simulation.time}.'
-                    )
-                    def enqueue_task(server=server, control=control):
-                        # server.control()
-                        control.target_states[server] = control.states.server_ready
-                        server.control()
-                    event = scheduler.cluster.network.delay(
-                        enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {control.task.id}. Simulation Time: {control.simulation.time}'
-                    )
-                    server.start_task_event(control.task, event) # block server execution loop
-                    control.simulation.event_queue.put(
-                        event
-                    )
-                else:
-                    # control task is finished respond to server that task is done.
-                    scheduler.logger.debug(f'Task: {control.task.id} has already finished, informing server: {server.id}. Simulation Time: {control.simulation.time}')
+                try:
+                    scheduler, = tuple(binding for binding in control.bindings if isinstance(binding,SchedulerClass))
+                except ValueError:
+                    # Task in control has finished on all servers, so the scheduler has unbound itself from the control.
+                    # scheduler.logger.debug(f'Task: {control.task.id} has already finished, informing server: {server.id}. Simulation Time: {control.simulation.time}')
                     def unbind_control(control=control, server=server):
                         control.target_states[server]=control.states.terminated
                         server.control()
@@ -687,6 +694,36 @@ class LatinSquareScheduler:
                     control.simulation.event_queue.put(
                         event
                     )
+                else:
+                    if not control.task.is_finished:
+                        scheduler.logger.debug(
+                            f'Scheduler has received response from LatinSquare control: {control.id}, for task: {control.task.id}, from server: {server.id}. '
+                            + f'Enqueuing task on server. Simulation time: {control.simulation.time}.'
+                        )
+                        def enqueue_task(server=server, control=control):
+                            # server.control()
+                            control.target_states[server] = control.states.server_ready
+                            server.control()
+                        event = scheduler.cluster.network.delay(
+                            enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {control.task.id}. Simulation Time: {control.simulation.time}'
+                        )
+                        server.start_task_event(control.task, event) # block server execution loop
+                        control.simulation.event_queue.put(
+                            event
+                        )
+                    else:
+                        # control task is finished respond to server that task is done.
+                        scheduler.logger.debug(f'Task: {control.task.id} has already finished, informing server: {server.id}. Simulation Time: {control.simulation.time}')
+                        def unbind_control(control=control, server=server):
+                            control.target_states[server]=control.states.terminated
+                            server.control()
+                        event = server.network.delay(
+                            unbind_control, logging_message=f'Send message to server: {server.id}, task: {control.task.id} is finished. Simulation time: {server.simulation.time}'
+                        )
+                        server.start_task_event(control.task, event) # block until network has finished responding.
+                        control.simulation.event_queue.put(
+                            event
+                        )
 
             def enqueue_task(fn):
                     def func(*args):
@@ -711,9 +748,15 @@ class LatinSquareScheduler:
                 server.logger.debug(
                     f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
                 )
-                control, = tuple(control for control in scheduler.controls if (control.__class__.__name__=='LatinSquareControl') and task is control.task)
-                control.target_states[scheduler] = control.states.task_finished
-                scheduler.control()
+                try:
+                    control, = tuple(control for control in scheduler.controls if (control.__class__.__name__=='LatinSquareControl') and task is control.task)
+                except ValueError:
+                    # task has finished on all servers so has been unbound from the scheduler.
+                    pass
+                else:
+                    control.target_states[scheduler] = control.states.task_finished
+                finally:
+                    scheduler.control()
 
         class Control:
             def late_binding_scheduler_preemption(control, scheduler):
@@ -741,10 +784,22 @@ class LatinSquareScheduler:
             def scheduler_control_select(fn):
                 def func(*args):
                     control = args[0]
-                    late_binding = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
-                    preemption = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['PREEMPTION']
-                    if preemption.lower() == 'true' and late_binding.lower() == 'true':
-                        LatinSquareScheduler.Scheduler.Control.late_binding_scheduler_preemption(*args)
+                    try:
+                        scheduler_control_params = control.simulation.scheduler_control_params
+                    except AttributeError:
+                        scheduler_control_params = {
+                            'late_binding': control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING'],
+                            'preemption': control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['PREEMPTION']
+                        }
+                        control.simulation.scheduler_control_params = scheduler_control_params
+                    else:
+                        pass
+                    finally:
+                        late_binding = scheduler_control_params['late_binding']
+                        preemption = scheduler_control_params['preemption']
+                        if preemption.lower() == 'true' and late_binding.lower() == 'true':
+                            LatinSquareScheduler.Scheduler.Control.late_binding_scheduler_preemption(*args)
+                        fn(*args)
                 return func
     class Server:
         class Queue:
@@ -903,9 +958,19 @@ class LatinSquareScheduler:
             def server_control_select(fn):
                 def func(*args):
                     control = args[0]
-                    late_binding = control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
-                    if late_binding.lower() == 'false':
-                        LatinSquareScheduler.Server.Control.sampling_server_control(*args)
+                    try:
+                        server_control_params = control.simulation.server_control_params
+                    except AttributeError:
+                        server_control_params = {
+                            'late_binding': control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
+                        }
+                        control.simulation.server_control_params = server_control_params
                     else:
-                        LatinSquareScheduler.Server.Control.late_binding_server_control(*args)
+                        pass
+                    finally:
+                        late_binding = server_control_params['late_binding']
+                        if late_binding.lower() == 'false':
+                            LatinSquareScheduler.Server.Control.sampling_server_control(*args)
+                        else:
+                            LatinSquareScheduler.Server.Control.late_binding_server_control(*args)
                 return func
