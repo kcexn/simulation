@@ -587,10 +587,6 @@ class LatinSquareScheduler:
 
             def schedule_batch(scheduler,batch):
                 """Enqueue batches of tasks scheduling"""
-                if not __package__:
-                    from computer.control import LatinSquareControl
-                else:
-                    from .computer.control import LatinSquareControl
                 from collections import deque
                 num_tasks = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
                 batch = deque(batch)
@@ -601,7 +597,7 @@ class LatinSquareScheduler:
                     server = next(scheduler.servers)
                     def schedule_batch(batch=sequenced_batch, server=server, scheduler=scheduler):
                         for task in batch:
-                            control, = tuple(control for control in scheduler.controls if isinstance(control,LatinSquareControl) and control.task is task)
+                            control, = tuple(control for control in scheduler.controls if (control.__class__.__name__=='LatinSquareControl') and control.task is task)
                             control.bind(server)
                         server.control()
                     scheduler.simulation.event_queue.put(
@@ -712,27 +708,17 @@ class LatinSquareScheduler:
 
         class Executor:
             def task_complete(scheduler, task, server=None):
-                if not __package__:
-                    from computer.control import LatinSquareControl
-                else:
-                    from .computer.control import LatinSquareControl
                 server.logger.debug(
                     f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
                 )
-                control, = tuple(control for control in scheduler.controls if isinstance(control, LatinSquareControl) and task is control.task)
+                control, = tuple(control for control in scheduler.controls if (control.__class__.__name__=='LatinSquareControl') and task is control.task)
                 control.target_states[scheduler] = control.states.task_finished
                 scheduler.control()
 
         class Control:
             def late_binding_scheduler_preemption(control, scheduler):
-                if not __package__:
-                    from computer.control import LatinSquareControl
-                    from computer.abstract_base_classes import ServerClass
-                else:
-                    from .computer.control import LatinSquareControl
-                    from .computer.abstract_base_classes import ServerClass
-                if isinstance(control, LatinSquareControl) and control.task.is_finished:
-                    bound_servers = set(binding for binding in control.bindings if isinstance(binding, ServerClass))
+                if control.__class__.__name__ == 'LatinSquareControl' and control.task.is_finished:
+                    bound_servers = set(binding for binding in control.bindings if binding.__class__.__name__ == 'Server')
                     for server in bound_servers:
                         # if control.target_states[server] != control.states.server_executing_task:
                         def preempt_task(server=server, control=control):
@@ -770,7 +756,7 @@ class LatinSquareScheduler:
                 else:
                     from .computer.control import LatinSquareControl
                 try:
-                    control, = tuple(control for control in scheduler.controls if isinstance(control, LatinSquareControl) and control.task is task)
+                    control, = tuple(control for control in scheduler.controls if (control.__class__.__name__ == 'LatinSquareControl') and control.task is task)
                 except ValueError:
                     # New Control.
                     control = LatinSquareControl(scheduler.simulation, task)
@@ -790,12 +776,8 @@ class LatinSquareScheduler:
                 """LatinSquare tasks are scheduled by RPC. So after
                 tasks complete on the server, the server needs to enter the control loop.
                 """
-                if not __package__:
-                    from computer.control import LatinSquareControl
-                else:
-                    from .computer.control import LatinSquareControl
                 try:
-                    control, = tuple(control for control in server.controls if isinstance(control, LatinSquareControl) and task is control.task)
+                    control, = tuple(control for control in server.controls if (control.__class__.__name__ == 'LatinSquareControl') and task is control.task)
                 except ValueError:
                     server.logger.debug(f'Task: {task.id}, preempted on server: {server.id}. Simulation time: {server.simulation.time}.')
                 else:
@@ -806,10 +788,6 @@ class LatinSquareScheduler:
 
         class Control:
             def late_binding_server_control(control, target):
-                if not __package__:
-                    from computer.control import LatinSquareControl
-                else:
-                    from .computer.control import LatinSquareControl
                 server = target
                 match control.target_states[server]:
                     case control.states.blocked:
@@ -817,7 +795,7 @@ class LatinSquareScheduler:
                     case control.states.server_enqueued:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_enqueued}, simulation time: {control.simulation.time}')
                         if server.busy_until == server.simulation.time:
-                            controls_on_server = [control for control in server.controls if isinstance(control, LatinSquareControl)]
+                            controls_on_server = [control for control in server.controls if (control.__class__.__name__=='LatinSquareControl')]
                             earliest_control = control
                             if len(controls_on_server) > 0:
                                 min_control = min(controls_on_server, key=lambda control: control.server_arrival_times[server])
