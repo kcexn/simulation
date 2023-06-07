@@ -807,23 +807,31 @@ class LatinSquareScheduler:
             def late_binding_scheduler_preemption(control, scheduler):
                 if control.__class__.__name__ == 'LatinSquareControl' and control.task.is_finished:
                     bound_servers = set(binding for binding in control.bindings if binding.__class__.__name__ == 'Server')
-                    for server in bound_servers:
-                        # if control.target_states[server] != control.states.server_executing_task:
-                        def preempt_task(server=server, control=control):
-                            control.target_states[server] = control.states.terminated
-                            try:
-                                server.stop_task_event(control.task)
-                            except KeyError:
-                                server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
-                            else:
-                                server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
-                            finally:
-                                server.control()
-                        scheduler.simulation.event_queue.put(
-                            scheduler.cluster.network.delay(
-                                preempt_task, logging_message=f'Preempt task: {control.task.id}, on server: {server.id}. Simulation time: {scheduler.simulation.time}.'
-                            )
-                        )
+                    try:
+                        preempted = control.preempted
+                    except AttributeError:
+                        preempted = True
+                        control.preempted = True
+                    else:
+                        pass
+                    finally:
+                        if not preempted:
+                            for server in bound_servers:
+                                def preempt_task(server=server, control=control):
+                                    control.target_states[server] = control.states.terminated
+                                    try:
+                                        server.stop_task_event(control.task)
+                                    except KeyError:
+                                        server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
+                                    else:
+                                        server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
+                                    finally:
+                                        server.control()
+                                scheduler.simulation.event_queue.put(
+                                    scheduler.cluster.network.delay(
+                                        preempt_task, logging_message=f'Preempt task: {control.task.id}, on server: {server.id}. Simulation time: {scheduler.simulation.time}.'
+                                    )
+                                )
 
 
             def scheduler_control_select(fn):
@@ -882,7 +890,6 @@ class LatinSquareScheduler:
                     server.logger.debug(f'Task: {task.id}, preempted on server: {server.id}. Simulation time: {server.simulation.time}.')
                 else:
                     control.target_states[server] = control.states.task_finished
-                    # server.stop_task_event(control.task)
                 finally:
                     server.control()
 
@@ -931,7 +938,6 @@ class LatinSquareScheduler:
                             pass
                         finally:
                             control.unbind(server)
-                            server.control()
                     case control.states.terminated:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.terminated}, simulation time: {control.simulation.time}')
                         try:
@@ -944,7 +950,6 @@ class LatinSquareScheduler:
                             pass
                         finally:
                             control.unbind(server)
-                            server.control()
 
             def sampling_server_control(control, target):
                 server = target
