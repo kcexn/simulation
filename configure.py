@@ -795,6 +795,7 @@ class LatinSquareScheduler:
                                     server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
                                 finally:
                                     server.control()
+                                    server.control()
                             scheduler.simulation.event_queue.put(
                                 scheduler.cluster.network.delay(
                                     preempt_task, logging_message=f'Preempt task: {control.task.id}, on server: {server.id}. Simulation time: {scheduler.simulation.time}.'
