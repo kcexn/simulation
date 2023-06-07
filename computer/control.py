@@ -274,8 +274,8 @@ class SparrowProbe(Control):
     @property
     def probe_state(self):
         if len(self.target_states) > 0:
-            state = max(self.target_states, key=lambda key: self.target_states[key])
-            return self.target_states[state]
+            target = max(self.target_states, key=lambda key: self.target_states[key])
+            return self.target_states[target]
         else:
             return 0
 
