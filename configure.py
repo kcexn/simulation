@@ -786,6 +786,7 @@ class LatinSquareScheduler:
                         control.preempted = True
                         for server in servers:
                             def preempt_task(server=server, control=control):
+                                server_status = control.target_states[server]
                                 control.target_states[server] = control.states.terminated
                                 try:
                                     server.stop_task_event(control.task)
@@ -795,7 +796,17 @@ class LatinSquareScheduler:
                                     server.logger.debug(f'Task: {control.task.id}, preempted from server: {server.id}. Simulation time: {server.simulation.time}.')
                                 finally:
                                     server.control()
-                                    server.control()
+                                    # This is a pretty hard race condition to troubleshoot. Running the control loop twice for the time being seems to do the trick.
+                                    # I'm pretty sure it has to do with evicting a task that is currently executing. The first time through the loop, cancels the execution.
+                                    # the second time through the loop starts the next task in the queue.
+                                    # As the probability of evicting a currently executing task (as opposed to a task that is finished, or a task that is ready) is pretty low, 
+                                    # This only begins to happen once you have hundreds of tasks and lots of concurrency. 
+                                    # Producing a trace to verify this behaviour will involve probing hundreds of tasks, and finding the exact set of conditions
+                                    # under which it happens.
+                                    #
+                                    # TODO: Produce a verifiable debug trace to verify this condition.
+                                    if server_status == control.states.server_executing_task:
+                                        server.control()
                             scheduler.simulation.event_queue.put(
                                 scheduler.cluster.network.delay(
                                     preempt_task, logging_message=f'Preempt task: {control.task.id}, on server: {server.id}. Simulation time: {scheduler.simulation.time}.'
