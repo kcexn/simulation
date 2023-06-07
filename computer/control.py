@@ -257,6 +257,7 @@ class SparrowProbe(Control):
         self.server_queue_lengths = {}
         self.target_states = {}
         self.task = task
+        self.enqueued = False
         self.batch_control = batch_control
         self.logger.debug(f'Task: {task.id} bound to probe: {self.id}. Simulation time: {self.simulation.time}.')
         # Sparrow has 6 states,
@@ -279,10 +280,7 @@ class SparrowProbe(Control):
         else:
             return 0
 
-    @property
-    def enqueued(self):
-        return self.probe_state >= self.states.server_executing_task
-
+    
     @Control.cleanup_control
     def control(self, target):
         """
