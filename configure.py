@@ -392,20 +392,18 @@ class SparrowScheduler:
                         pass
                     finally:
                         if PREEMPTION.lower() == 'true':
-                            try:
-                                preempted = next_probe.preempted
-                            except AttributeError:
-                                next_probe.preempted = True
-                                other_servers = [other_server for other_server in next_probe.target_states if server.__class__.__name__ == 'Server' and other_server is not server]
-                                for server in other_servers:
-                                    def preempt(server=server, probe=next_probe):
-                                        probe.target_states[server] = probe.states.terminated
-                                        server.control()
-                                    probe.simulation.event_queue.put(
-                                        scheduler.cluster.network.delay(
-                                            preempt, logging_message=f'Preempt probe: {next_probe.id}, task: {next_probe.task.id}, on server: {server.id}. Simulation time: {next_probe.simulation.time}.'
-                                        )
+                            other_servers = [other_server for other_server in next_probe.target_states if server.__class__.__name__ == 'Server' and other_server is not server]
+                            for other_server in other_servers:
+                                def preempt(other_server=other_server, next_probe=next_probe):
+                                    other_server.logger.debug(f'server: {other_server.id}, having probe: {next_probe.id}, preempted. simulation time: {other_server.simulation.time}.')
+                                    next_probe.target_states[other_server] = next_probe.states.terminated
+                                    # other_server.control()
+                                probe.simulation.event_queue.put(
+                                    scheduler.cluster.network.delay(
+                                        preempt, logging_message=f'Preempt probe: {next_probe.id}, task: {next_probe.task.id}, on server: {server.id}. Simulation time: {next_probe.simulation.time}.'
                                     )
+                                )
+                            
                 else:
                     # all probes enqueued
                     def unenqueue_probes(all_probes = batch_control.probes, server=server):
