@@ -379,12 +379,14 @@ class SparrowScheduler:
                         next_probe.target_states[scheduler] = next_probe.states.server_executing_task
                         scheduler.logger.debug(
                             f'Scheduler has received response from sparrow probe: {probe.id}, for task: {probe.task.id}.'
-                            + f'Enqueuing next probe in batch: {next_probe.id}, for task: {next_probe.task.id}, on server{ server.id}.'
+                            + f'Enqueuing next probe in batch: {next_probe.id}, for task: {next_probe.task.id}, on server: {server.id}.'
                             + f'Simulation time: {scheduler.simulation.time}.'
                         )
-                        def enqueue_task(server=server, current_probe=probe, next_probe=next_probe):
-                            current_probe.target_states[server] = current_probe.states.terminated
-                            next_probe.target_states[server] = current_probe.states.server_ready
+                        def enqueue_task(server=server, next_probe = next_probe, unenqueued_probes=probes, batch_control_probes=batch_control.probes):
+                            for probe in batch_control_probes:
+                                if probe not in unenqueued_probes:
+                                    probe.target_states[server] = probe.states.terminated
+                            next_probe.target_states[server] = next_probe.states.server_ready
                             server.control()
                         event = scheduler.cluster.network.delay(
                             enqueue_task, logging_message=f'Send message to server: {server.id}.'
