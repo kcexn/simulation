@@ -97,9 +97,8 @@ class LatinSquareControl(Control):
         blocked = -2
         terminated = -1
         server_enqueued = 0
-        server_ready = 1
-        server_executing_task = 2
-        task_finished = 3
+        server_executing_task = 1
+        task_finished = 2
     states = States
     logger = logging.getLogger('computer.Control.LatinSquareControl')
     def __init__(self, simulation, task, batch_control=None):

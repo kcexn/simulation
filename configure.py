@@ -722,22 +722,8 @@ class LatinSquareScheduler:
                     )
                 else:
                     if not control.task.is_finished:
+                        # Task begins executing on the server before notifying the server.
                         pass
-                        # scheduler.logger.debug(
-                        #     f'Scheduler has received response from LatinSquare control: {control.id}, for task: {control.task.id}, from server: {server.id}. '
-                        #     + f'Enqueuing task on server. Simulation time: {control.simulation.time}.'
-                        # )
-                        # def enqueue_task(server=server, control=control):
-                        #     # server.control()
-                        #     control.target_states[server] = control.states.server_ready
-                        #     server.control()
-                        # event = scheduler.cluster.network.delay(
-                        #     enqueue_task, logging_message=f'Send Message to Server: {server.id} to enqueue task: {control.task.id}. Simulation Time: {control.simulation.time}'
-                        # )
-                        # server.start_task_event(control.task, event) # block server execution loop
-                        # control.simulation.event_queue.put(
-                        #     event
-                        # )
                     else:
                         # control task is finished respond to server that task is done.
                         scheduler.logger.debug(f'Task: {control.task.id} has already finished, informing server: {server.id}. Simulation Time: {control.simulation.time}')
@@ -898,20 +884,6 @@ class LatinSquareScheduler:
                                     event
                                 )
                                 control.target_states[server] = control.states.server_executing_task
-
-                                # server.start_task_event(control.task, event) #Block execution loop of server.
-                                # control.simulation.event_queue.put(
-                                #     event
-                                # )
-                                # control.target_states[server] = control.states.blocked #Block subsequent controls until scheduler response.
-                    case control.states.server_ready:
-                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_ready}, simulation time: {control.simulation.time}')
-                        if server.busy_until == control.simulation.time:
-                            event = server.enqueue_task(control.task)
-                            control.simulation.event_queue.put(
-                                event
-                            )
-                            control.target_states[server] = control.states.server_executing_task
                     case control.states.server_executing_task:
                         control.logger.debug(f'Server: {target.id}, control loop for LatinSquare Control: {control.id}, state: {control.states.server_executing_task}, simulation time: {control.simulation.time}')
                     case control.states.task_finished:
