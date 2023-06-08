@@ -392,7 +392,7 @@ class SparrowScheduler:
                         pass
                     finally:
                         if PREEMPTION.lower() == 'true':
-                            other_servers = [other_server for other_server in next_probe.target_states if server.__class__.__name__ == 'Server' and other_server is not server]
+                            other_servers = [other_server for other_server in next_probe.target_states if other_server.__class__.__name__ == 'Server' and other_server is not server]
                             for other_server in other_servers:
                                 def preempt(other_server=other_server, next_probe=next_probe):
                                     other_server.logger.debug(f'server: {other_server.id}, having probe: {next_probe.id}, preempted. simulation time: {other_server.simulation.time}.')

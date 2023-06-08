@@ -52,11 +52,12 @@ class Simulation(object):
 __all__ = ['Simulation']
 
 if __name__ == '__main__':
-    # logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
+    logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
     simulation = Simulation()
     simulation.run()
     unfinished_jobs = [job for job in simulation.work if job.__class__ == Job and not job.is_finished]
-    logging.debug(f'unfinished tasks: {[task.id for job in unfinished_jobs for task in job.tasks]}')
+    logging.debug(f'unfinished jobs: {[job.id for job in unfinished_jobs]}')
+    logging.debug(f'unfinished tasks: {[task.id for job in unfinished_jobs for task in job.tasks if not task.is_finished]}')
     jobs = [job for job in simulation.work if job.__class__ == Job and job.start_time>0 and job.is_finished]
     print(len(jobs))
     sim_data = [
