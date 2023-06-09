@@ -396,8 +396,12 @@ class SparrowScheduler:
                             for other_server in other_servers:
                                 def preempt(other_server=other_server, next_probe=next_probe):
                                     other_server.logger.debug(f'server: {other_server.id}, having probe: {next_probe.id}, preempted. simulation time: {other_server.simulation.time}.')
-                                    next_probe.target_states[other_server] = next_probe.states.terminated
-                                    # other_server.control()
+                                    if next_probe.target_states[other_server] != next_probe.states.server_ready:
+                                        # If the server probe is in the server_ready state AND the probe is being preempted on the server, then
+                                        # that implies that the server is requesting the next task in the batch from next_probe.
+                                        # next_probe will be terminated on the target server by the enqueue task response.
+                                        next_probe.target_states[other_server] = next_probe.states.terminated
+                                    other_server.control()
                                 probe.simulation.event_queue.put(
                                     scheduler.cluster.network.delay(
                                         preempt, logging_message=f'Preempt probe: {next_probe.id}, task: {next_probe.task.id}, on server: {server.id}. Simulation time: {next_probe.simulation.time}.'
@@ -536,7 +540,6 @@ class SparrowScheduler:
                             pass
                         finally:
                             probe.unbind(server)
-                            # server.control()
                     case probe.states.terminated:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.terminated}, simulation time: {probe.simulation.time}')
                         try:
@@ -547,7 +550,6 @@ class SparrowScheduler:
                             pass
                         finally:
                             probe.unbind(server)
-                            # server.control()
 
             def sampling_server_control(probe, target):
                 server = target
