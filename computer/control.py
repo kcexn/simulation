@@ -2,44 +2,12 @@ import logging
 
 if __package__ == 'computer':
     from events import *
-    from .abstract_base_classes import ServerClass, SchedulerClass
+    from .abstract_base_classes import ServerClass, SchedulerClass, ControlClass
 else:
     from ..events import *
-    from .abstract_base_classes import ServerClass, SchedulerClass
+    from .abstract_base_classes import ServerClass, SchedulerClass, ControlClass
 
-class Control(object):
-    """A Generic Computer Control"""
-    logger = logging.getLogger('Computer.Control')
-    def __init__(self, simulation):
-        self.simulation = simulation
-        self.bindings = set()
-
-    @staticmethod
-    def cleanup_control(fn):
-        def func(*args):
-            control = args[0]
-            fn(*args)
-            target = args[1]
-            if target in control.bindings and control not in target.controls:
-                # control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
-                target.add_control(control)
-        return func
-
-    @property
-    def id(self):
-        return id(self)
-
-    def control(self, target):
-        raise NotImplementedError
-    
-    def bind(self, target):
-        raise NotImplementedError
-    
-    def unbind(self, target):
-        raise NotImplementedError
-    
-
-class LatinSquareBatch(Control):
+class LatinSquareBatch(ControlClass):
     """Latin Square Batch Control Management for collections of tasks.
     """
     logger = logging.getLogger('computer.Control.LatinSquareBatch')
@@ -49,7 +17,7 @@ class LatinSquareBatch(Control):
         self.controls = set(LatinSquareControl(simulation, task, batch_control=self) for task in batch)
         self.logger.debug(f'Controls in batch: {[control for control in self.controls]}. Simulation time: {self.simulation.time}.')
 
-    @Control.cleanup_control
+    @ControlClass.cleanup_control
     def control(self, target):
         pass
 
@@ -85,7 +53,7 @@ class LatinSquareBatch(Control):
         self.controls.clear()
 
 
-class LatinSquareControl(Control):
+class LatinSquareControl(ControlClass):
     """Latin Square Scheduler Control
     """
     from enum import IntEnum
@@ -123,7 +91,7 @@ class LatinSquareControl(Control):
     def enqueued(self):
         return self.control_state >= self.states.server_executing_task
 
-    @Control.cleanup_control
+    @ControlClass.cleanup_control
     def control(self, target):
         if isinstance(target, ServerClass):
             self.server_control(target)
@@ -188,7 +156,7 @@ class LatinSquareControl(Control):
             self.unbind(target)
 
 
-class SparrowBatch(Control):
+class SparrowBatch(ControlClass):
     """Sparrow Scheduler Batch
     management object for a collection of sparrow probes.
     """
@@ -200,7 +168,7 @@ class SparrowBatch(Control):
         self.probes = set(SparrowProbe(simulation, task, batch_control=self) for task in batch)
         self.logger.debug(f'Probes in batch: {[probe for probe in self.probes]}. Simulation time: {self.simulation.time}.')
 
-    @Control.cleanup_control
+    @ControlClass.cleanup_control
     def control(self, target):
         pass
     
@@ -233,7 +201,7 @@ class SparrowBatch(Control):
     def __del__(self):
         self.probes.clear()
 
-class SparrowProbe(Control):
+class SparrowProbe(ControlClass):
     """Sparrow Scheduler Probe"""
     from enum import IntEnum
     if __package__ == 'computer':
@@ -280,7 +248,7 @@ class SparrowProbe(Control):
             return 0
 
     
-    @Control.cleanup_control
+    @ControlClass.cleanup_control
     def control(self, target):
         """
         Target can be a server or a scheduler.

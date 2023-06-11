@@ -1,6 +1,5 @@
 import configparser
-import cProfile
-import pstats
+import logging
 
 def latin_square(n):
     return [[(i+j)%n for i in range(n)] for j in range(n)]
@@ -56,7 +55,7 @@ class SchedulingPolicies:
             policy = args[0].POLICY
             match policy:
                 case 'RoundRobin':
-                    SchedulingPolicies.round_robin(*args)
+                    RoundRobinScheduler.Scheduler.Queue.round_robin(*args)
                     return fn(*args)
                 case 'FullRepetition':
                     SchedulingPolicies.full_repetition(*args)
@@ -139,6 +138,8 @@ class ServerSelectionPolicies:
                     finally:
                         num_tasks = cluster_control_config['num_tasks']
                         return ServerSelectionPolicies.random(cluster, num_tasks)
+                case 'RoundRobin':
+                    return ServerSelectionPolicies.cycle(cluster)
                 case _:
                     return ServerSelectionPolicies.cycle(cluster)
         return func
@@ -168,6 +169,8 @@ class BlockingPolicies:
                     SparrowScheduler.Server.Queue.block(*args)
                 case 'LatinSquare':
                     LatinSquareScheduler.Server.Queue.block(*args)
+                case 'RoundRobin':
+                    pass
                 case _:
                     BlockingPolicies.infinite_queue(*args)
                     return fn(*args)
@@ -218,6 +221,8 @@ class ServerTaskExecutionPolicies:
                     SparrowScheduler.Server.Executor.task_complete(*args)
                 case 'LatinSquare':
                     LatinSquareScheduler.Server.Executor.task_complete(*args)
+                case 'RoundRobin':
+                    RoundRobinScheduler.Server.Executor.complete_task(*args)
                 case _:
                     ServerTaskExecutionPolicies.default_task_completion(*args)
         return func
@@ -243,6 +248,8 @@ class SchedulerTaskCompletionPolicies:
                     SparrowScheduler.Scheduler.Executor.task_complete(*args,**kwargs)
                 case 'LatinSquare':
                     LatinSquareScheduler.Scheduler.Executor.task_complete(*args, **kwargs)
+                case 'RoundRobin':
+                    RoundRobinScheduler.Scheduler.Executor.complete_task(*args, **kwargs)
                 case _:
                     SchedulerTaskCompletionPolicies.default_task_completion(*args)
         return func
@@ -379,7 +386,7 @@ class SparrowScheduler:
                     event = scheduler.cluster.network.delay(
                         enqueue, logging_message=f'Send message to server: {server.id}, enqueue task: {probe.task.id}. Simulation time: {probe.simulation.time}.'
                     )
-                    server.tasks[next_probe.task] = event #Block
+                    server.start_task_event(next_probe.task, event) #Block
                     probe.simulation.event_queue.put(
                         event
                     )
@@ -417,7 +424,7 @@ class SparrowScheduler:
                     event = scheduler.cluster.network.delay(
                         unenqueue_probes, logging_message=f'Send message to server: {server.id}, all tasks have been enqueued already. Simulation time: {probe.simulation.time}.'
                     )
-                    server.tasks[probe.task]=event #Block
+                    server.start_task_event(probe.task, event)
                     probe.simulation.event_queue.put(
                         event
                     )
@@ -455,11 +462,6 @@ class SparrowScheduler:
         class Executor:
             def task_complete(scheduler, task, server=None):
                 pass
-                # server.logger.debug(
-                #     f'Task: {task.id} completed on server: {server.id}. Simulation time: {scheduler.simulation.time}'
-                # )
-                # probe, = tuple(control for control in scheduler.controls if control.__class__.__name__ == 'SparrowProbe' and task is control.task)
-                # probe.target_states[scheduler] = probe.states.task_finished
 
     class Server:
         class Queue:
@@ -528,11 +530,13 @@ class SparrowScheduler:
                             )
                             probe.target_states[server] = probe.states.server_executing_task
                     case probe.states.server_executing_task:
+                        # Probe blocks in this state until task completion event.
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_executing_task}, simulation time: {probe.simulation.time}')
-                        pass
                     case probe.states.task_finished:
                         probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.task_finished}, simulation time: {probe.simulation.time}')
                         try:
+                            # Although the event loop will ensure that the task finish time is measured properly.
+                            # Server idle time accounting is handled by the server stop start methods.
                             server.stop_task_event(probe.task)
                         except KeyError:
                             pass
@@ -985,3 +989,222 @@ class LatinSquareScheduler:
                         else:
                             LatinSquareScheduler.Server.Control.late_binding_server_control(*args)
                 return func
+
+class RoundRobinScheduler:
+    """
+    Round Robin Scheduling Methods
+    """
+    class Scheduler:
+        class Queue:
+            def round_robin(scheduler, job):
+                from numpy import array_split
+                tasks = job.tasks
+                batches = [tuple(tasks.tolist()) for tasks in array_split(tasks,1)]
+                for batch in batches:
+                    batch_control = RoundRobinScheduler.Controls.RoundRobinBatch(scheduler.simulation, batch)
+                    batch_control.bind(scheduler)
+                    scheduler.control()
+
+        class Executor:
+            def complete_task(scheduler, task, server=None):
+                control, = tuple(control for control in scheduler.controls if control.__class__.__name__ == 'RoundRobinTask' and task is control.task)
+                control.target_states[scheduler] = control.States.task_finished
+                scheduler.control()
+
+        class Control:
+            def scheduler_control(control, scheduler):
+                match control.target_states[scheduler]:
+                    case control.States.blocked:
+                        pass
+                    case control.States.terminated:
+                        pass
+                    case control.States.task_unenqueued:
+                        pass
+                    case control.States.task_enqueued:
+                        pass
+                    case control.States.task_executing:
+                        pass
+                    case control.States.task_finished:
+                        control.unbind(scheduler)
+                
+
+    class Server:
+        class Queue:
+            pass
+
+        class Executor:
+            def complete_task(server, task):
+                control, = tuple(control for control in server.controls if task is control.task)
+                control.target_states[server] = control.States.task_finished
+                server.control()
+
+        class Control:
+            def server_control(control, server):
+                match control.target_states[server]:
+                    case control.States.blocked:
+                        pass
+                    case control.States.terminated:
+                        pass
+                    case control.States.task_unenqueued:
+                        pass
+                    case control.States.task_enqueued:
+                        if server.busy_until == server.simulation.time:
+                            server.logger.debug(f'Enqueuing task: {control.task.id}, on Server: {server.id}. Simulation time: {server.simulation.time}.')
+                            event = server.enqueue_task(control.task)
+                            server.simulation.event_queue.put(
+                                event
+                            )
+                            control.target_states[server] = control.States.task_executing                  
+                    case control.States.task_executing:
+                        # Blocked on task completion event.
+                        pass
+                    case control.States.task_finished:
+                        server.logger.debug(f'Finished executing task: {control.task.id}, on Server: {server.id}. Simulation time: {server.simulation.time}.')
+                        server.stop_task_event(control.task)
+                        control.unbind(server)
+                        # Should put the task finished notification in here. But first need to decouple it from the event loop which means modifying
+                        # the code for all of the other schedulers.
+
+    class Controls:
+        if not __package__:
+            from computer.abstract_base_classes import ControlClass
+        else:
+            from .computer.abstract_base_classes import ControlClass
+        class RoundRobinTask(ControlClass):
+            from enum import IntEnum
+            if not __package__:
+                from computer.abstract_base_classes import ControlClass
+            else:
+                from .computer.abstract_base_classes import ControlClass
+            class States(IntEnum):
+                blocked = -2
+                terminated = -1
+                task_unenqueued = 0
+                task_enqueued = 1
+                task_executing = 2
+                task_finished = 3
+            logger = logging.getLogger('Computer.Control.RoundRobinTask')
+            def __init__(self, simulation, task, batch_control=None):
+                super(RoundRobinScheduler.Controls.RoundRobinTask, self).__init__(simulation)
+                self.batch_control = batch_control
+                self.server_arrival_times = {}
+                self.target_states = {}
+                self.task = task
+
+            @ControlClass.cleanup_control
+            def control(self, target):
+                match target.__class__.__name__:
+                    case 'Server':
+                        RoundRobinScheduler.Server.Control.server_control(self, target)
+                    case 'Scheduler':
+                        RoundRobinScheduler.Scheduler.Control.scheduler_control(self, target)
+
+            def bind(self, target):
+                match target.__class__.__name__:
+                    case 'Server':
+                        self.bind_server(target)
+                    case 'Scheduler':
+                        self.bind_scheduler(target)
+
+            def bind_server(self, server):
+                self.bindings.add(server)
+                if self not in server.controls:
+                    server.add_control(self)
+                self.target_states[server] = self.States.task_enqueued
+
+            def bind_scheduler(self, scheduler):
+                self.bindings.add(scheduler)
+                if self not in scheduler.controls:
+                    scheduler.add_control(self)
+                self.target_states[scheduler] = self.States.task_unenqueued
+
+            def unbind(self, target):
+                match target.__class__.__name__:
+                    case 'Server':
+                        self.unbind_server(target)
+                    case 'Scheduler':
+                        self.unbind_scheduler(target)
+
+            def unbind_server(self, server):
+                self.bindings.discard(server)
+                while self in server.controls:
+                    server.controls.remove(self)
+
+            def unbind_scheduler(self, scheduler):
+                self.bindings.discard(scheduler)
+                while self in scheduler.controls:
+                    scheduler.controls.remove(self)
+                server_controls = [
+                    control for control in self.batch_control.controls 
+                    if 'Server' in (target.__class__.__name__ for target in control.target_states)
+                    ]
+                if len(server_controls) == 0:
+                    self.batch_control.unbind(scheduler)
+
+
+        class RoundRobinBatch(ControlClass):
+            if not __package__:
+                from computer.abstract_base_classes import ControlClass
+            else:
+                from .computer.abstract_base_classes import ControlClass
+            logger = logging.getLogger('Computer.Control.RoundRobinBatchControl')
+            def __init__(self, simulation, batch):
+                super(RoundRobinScheduler.Controls.RoundRobinBatch, self).__init__(simulation)
+                self.batches = [batch]
+                self.controls = set(
+                    RoundRobinScheduler.Controls.RoundRobinTask(simulation, task, batch_control=self) for task in batch
+                    )
+
+            @ControlClass.cleanup_control
+            def control(self, target):
+                match target.__class__.__name__:
+                    case 'Server':
+                        pass
+                    case 'Scheduler':
+                        self.control_scheduler(target)
+
+            def control_scheduler(self, scheduler):
+                unenqueued_controls = [control for control in self.controls if control.target_states[scheduler] == control.States.task_unenqueued]
+                for control in unenqueued_controls:
+                    server = next(scheduler.servers)
+                    def enqueue(server = server, control = control):
+                        control.bind(server)
+                        server.control()
+                    event = scheduler.cluster.network.delay(
+                        enqueue, logging_message = f'Send message to server: {server.id}, enqueue task: {control.task.id}. Simulation time: {scheduler.simulation.time}.'
+                    )
+                    scheduler.simulation.event_queue.put(
+                        event
+                    )
+                    control.target_states[scheduler] = control.States.task_enqueued
+
+            def bind(self, target):
+                match target.__class__.__name__:
+                    case 'Server':
+                        pass
+                    case 'Scheduler':
+                        self.bind_scheduler(target)
+
+            def bind_scheduler(self, scheduler):
+                self.bindings.add(scheduler)
+                if self not in scheduler.controls:
+                    scheduler.add_control(self)
+                for control in self.controls:
+                    control.bind(scheduler)
+
+            def unbind(self, target):
+                match target.__class__.__name__:
+                    case 'Server':
+                        pass
+                    case 'Scheduler':
+                        self.unbind_scheduler(target)
+
+            def unbind_scheduler(self, scheduler):
+                self.bindings.discard(scheduler)
+                while self in scheduler.controls:
+                    scheduler.controls.remove(self)
+                
+
+
+
+

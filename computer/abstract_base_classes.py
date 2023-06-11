@@ -60,3 +60,37 @@ class SchedulerClass(ABC):
     @abstractmethod
     def control(self):
         pass
+
+
+class ControlClass(ABC):
+    """A Generic Computer Control"""
+    def __init__(self, simulation):
+        self.simulation = simulation
+        self.bindings = set()
+
+    @staticmethod
+    def cleanup_control(fn):
+        def func(*args):
+            control = args[0]
+            fn(*args)
+            target = args[1]
+            if target in control.bindings and control not in target.controls:
+                # control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
+                target.add_control(control)
+        return func
+
+    @property
+    def id(self):
+        return id(self)
+
+    @abstractmethod
+    def control(self, target):
+        pass
+    
+    @abstractmethod
+    def bind(self, target):
+        pass
+    
+    @abstractmethod
+    def unbind(self, target):
+        pass

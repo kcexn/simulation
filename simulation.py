@@ -82,7 +82,7 @@ if __name__ == '__main__':
     server_cum_times = [[server.cumulative_idle_time, server.cumulative_busy_time] for server in simulation.scheduler.cluster.servers]
     # print(server_cum_times)
     # print(f'{[server.idle_time_triggers["idle_start_time"] for server in simulation.scheduler.cluster.servers]}')
-    print(f'{[[times[0]/sum(times), times[1]/sum(times)] for times in server_cum_times]}')
+    # print(f'{[[times[0]/sum(times), times[1]/sum(times)] for times in server_cum_times]}')
 
     print(f'Average Job Latency: {sum(latencies)/simulation.NUM_JOBS}')
     print(f'Average Task Latency: {avg_task_latency}')
