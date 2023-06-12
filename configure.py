@@ -1017,7 +1017,7 @@ class RoundRobinScheduler:
                     case control.States.blocked:
                         pass
                     case control.States.terminated:
-                        pass
+                        control.unbind(scheduler)
                     case control.States.task_unenqueued:
                         pass
                     case control.States.task_enqueued:
@@ -1026,8 +1026,31 @@ class RoundRobinScheduler:
                         pass
                     case control.States.task_finished:
                         control.unbind(scheduler)
-                
 
+            def scheduler_batch_control(batch_control, scheduler):
+                match batch_control.target_states[scheduler]:
+                    case batch_control.States.blocked:
+                        pass
+                    case batch_control.States.terminated:
+                        batch_control.unbind(scheduler)
+                    case batch_control.States.batch_unenqueued:
+                        unenqueued_controls = [control for control in batch_control.controls if control.target_states[scheduler] == control.States.task_unenqueued]
+                        for control in unenqueued_controls:
+                            server = next(scheduler.servers)
+                            def enqueue(server = server, control = control):
+                                control.bind(server)
+                                server.control()
+                            event = scheduler.cluster.network.delay(
+                                enqueue, logging_message = f'Send message to server: {server.id}, enqueue task: {control.task.id}. Simulation time: {scheduler.simulation.time}.'
+                            )
+                            scheduler.simulation.event_queue.put(
+                                event
+                            )
+                            control.target_states[scheduler] = control.States.task_enqueued
+                        batch_control.target_states[scheduler] = batch_control.States.batch_enqueued
+                    case batch_control.States.batch_enqueued:
+                        pass
+                
     class Server:
         class Queue:
             pass
@@ -1139,14 +1162,19 @@ class RoundRobinScheduler:
                     if 'Server' in (target.__class__.__name__ for target in control.target_states)
                     ]
                 if len(server_controls) == 0:
-                    self.batch_control.unbind(scheduler)
-
+                    self.batch_control.target_states[scheduler] = self.batch_control.States.terminated
 
         class RoundRobinBatch(ControlClass):
+            from enum import IntEnum
             if not __package__:
                 from computer.abstract_base_classes import ControlClass
             else:
                 from .computer.abstract_base_classes import ControlClass
+            class States(IntEnum):
+                blocked = -2
+                terminated = -1
+                batch_unenqueued = 0 # When batches of tasks arrive at the scheduler, they are unenqueud
+                batch_enqueued = 1 # After assigning batches of tasks to servers, they are enqueued.
             logger = logging.getLogger('Computer.Control.RoundRobinBatchControl')
             def __init__(self, simulation, batch):
                 super(RoundRobinScheduler.Controls.RoundRobinBatch, self).__init__(simulation)
@@ -1154,6 +1182,7 @@ class RoundRobinScheduler:
                 self.controls = set(
                     RoundRobinScheduler.Controls.RoundRobinTask(simulation, task, batch_control=self) for task in batch
                     )
+                self.target_states = {}
 
             @ControlClass.cleanup_control
             def control(self, target):
@@ -1161,22 +1190,7 @@ class RoundRobinScheduler:
                     case 'Server':
                         pass
                     case 'Scheduler':
-                        self.control_scheduler(target)
-
-            def control_scheduler(self, scheduler):
-                unenqueued_controls = [control for control in self.controls if control.target_states[scheduler] == control.States.task_unenqueued]
-                for control in unenqueued_controls:
-                    server = next(scheduler.servers)
-                    def enqueue(server = server, control = control):
-                        control.bind(server)
-                        server.control()
-                    event = scheduler.cluster.network.delay(
-                        enqueue, logging_message = f'Send message to server: {server.id}, enqueue task: {control.task.id}. Simulation time: {scheduler.simulation.time}.'
-                    )
-                    scheduler.simulation.event_queue.put(
-                        event
-                    )
-                    control.target_states[scheduler] = control.States.task_enqueued
+                        RoundRobinScheduler.Scheduler.Control.scheduler_batch_control(self, target)
 
             def bind(self, target):
                 match target.__class__.__name__:
@@ -1191,6 +1205,7 @@ class RoundRobinScheduler:
                     scheduler.add_control(self)
                 for control in self.controls:
                     control.bind(scheduler)
+                self.target_states[scheduler] = self.States.batch_unenqueued
 
             def unbind(self, target):
                 match target.__class__.__name__:
