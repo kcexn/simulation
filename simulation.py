@@ -80,10 +80,7 @@ if __name__ == '__main__':
     avg_task_latency = sum(task_latencies)/len(task_latencies)
 
     server_cum_times = [[server.cumulative_idle_time, server.cumulative_busy_time] for server in simulation.scheduler.cluster.servers]
-    total_idle_time = sum(times[0] for times in server_cum_times)
-    total_busy_time = sum(times[1] for times in server_cum_times)
-    availability = total_idle_time/(total_idle_time + total_busy_time)
-    print(availability)
+    print(f'{[(times[0]/sum(times), times[1]/sum(times)) for times in server_cum_times]}')
 
     # print(server_cum_times)
     # print(f'{[server.idle_time_triggers["idle_start_time"] for server in simulation.scheduler.cluster.servers]}')
