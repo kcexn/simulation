@@ -5,13 +5,11 @@ from numpy import array
 if __package__ == 'computer':
     from processes import *
     from work import *
-    from .control import *
     from .abstract_base_classes import ServerClass, SchedulerClass
     from configure import latin_square
 else:
     from ..processes import *
     from ..work import *
-    from .control import *
     from .abstract_base_classes import ServerClass, SchedulerClass
     from ..configure import latin_square
 

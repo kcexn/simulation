@@ -388,15 +388,11 @@ class SparrowScheduler:
             def block(scheduler, task, server):
                 """Sparrow will block all task scheduling requests. 
                 Instead task scheduling is handled by control signals in the SparrowProbes."""
-                if not __package__:
-                    from computer.control import SparrowProbe
-                else:
-                    from .computer.control import SparrowProbe
                 try:
-                    probe, = tuple(probe for probe in scheduler.controls if isinstance(probe, SparrowProbe) and probe.task is task)
+                    probe, = tuple(probe for probe in scheduler.controls if probe.__class__.__name__ == 'SparrowProbe' and probe.task is task)
                 except ValueError as e:
                     # New probe.
-                    probe = SparrowProbe(scheduler.simulation, task)
+                    probe = SparrowScheduler.Controls.SparrowProbe(scheduler.simulation, task)
                     probe.bind(scheduler)
                 else:
                     # Probe already bound to scheduler.
@@ -868,15 +864,11 @@ class LatinSquareScheduler:
            def block(scheduler, task, server):
                 """LatinSquare will block all task scheduling requests. 
                 Instead task scheduling is handled by control signals in the LatinSquareControls."""
-                if not __package__:
-                    from computer.control import LatinSquareControl
-                else:
-                    from .computer.control import LatinSquareControl
                 try:
                     control, = tuple(control for control in scheduler.controls if (control.__class__.__name__ == 'LatinSquareControl') and control.task is task)
                 except ValueError:
                     # New Control.
-                    control = LatinSquareControl(scheduler.simulation, task)
+                    control = LatinSquareScheduler.Controls.LatinSquareControl(scheduler.simulation, task)
                     control.bind(scheduler)
                 else:
                     # Control already bound to scheduler.
@@ -1021,8 +1013,7 @@ class LatinSquareScheduler:
                         LatinSquareScheduler.Server.Control.sampling_server_control(control, server)
                     else:
                         LatinSquareScheduler.Server.Control.late_binding_server_control(control, server)
-                
-            
+                  
     class Controls:
         if not __package__:
             from computer.abstract_base_classes import ControlClass
