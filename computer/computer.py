@@ -85,7 +85,7 @@ class Server(ServerClass):
         finally:
             idle_start_time = self.idle_time_triggers['idle_start_time']
             idle_stop_time = self.idle_time_triggers['idle_stop_time']
-            if idle_stop_time >= idle_start_time and self.simulation.time >= idle_stop_time:
+            if idle_stop_time >= idle_start_time and self.simulation.time >= idle_stop_time and self.busy_until == self.simulation.time:
                 self.cumulative_busy_time += self.simulation.time - idle_stop_time
                 self.idle_time_triggers ['idle_start_time'] = self.simulation.time
                 self.idle_start_times.add(self.simulation.time)
