@@ -52,7 +52,7 @@ class Simulation(object):
 __all__ = ['Simulation']
 
 if __name__ == '__main__':
-    # logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
+    logging.basicConfig(filename='logging.log', filemode='w', level='INFO')
     simulation = Simulation()
     simulation.run()
     unfinished_jobs = [job for job in simulation.work if job.__class__ == Job and not job.is_finished]
