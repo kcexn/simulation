@@ -309,6 +309,3 @@ class SparrowProbe(ControlClass):
         targets = [target for target in self.bindings]
         for target in targets:
             self.unbind(target)
-
-__all__ = ['SparrowProbe']
-
