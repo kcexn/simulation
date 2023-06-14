@@ -244,7 +244,8 @@ class SparrowScheduler:
                 except AttributeError:
                     scheduler_enqueuing_params = {
                         'batch_size': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['BATCH_SIZE']),
-                        'num_probes': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
+                        'num_probes': int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES']),
+                        'late_binding': scheduler.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['LATE_BINDING']
                     }
                     scheduler.scheduler_enqueuing_params = scheduler_enqueuing_params
                 else:
@@ -324,7 +325,7 @@ class SparrowScheduler:
                             if len(bindings) == 1:
                                 batch_control.unbind(scheduler)
 
-            def scheduler_probe_control(probe, server, scheduler):
+            def scheduler_late_binding_probe_control(probe, server, scheduler):
                 match probe.target_states[server]:
                     case probe.States.blocked:
                         pass
@@ -383,6 +384,46 @@ class SparrowScheduler:
                     case probe.States.task_finished:
                         pass
 
+            def scheduler_sampling_probe_control(probe, server, scheduler):
+                scheduler.logger.debug(f'Scheduler entering control loop for probe: {probe.id}, in response to a request from server: {server.id}. Simulation time: {scheduler.simulation.time}.')
+                match probe.target_states[server]:
+                    case probe.States.blocked:
+                        num_probes = scheduler.scheduler_enqueuing_params['num_probes']
+                        if len(probe.server_queue_lengths) == num_probes:
+                            min_server = min(probe.server_queue_lengths, key = lambda server: probe.server_queue_lengths[server])
+                            def enqueue_task(probe=probe, server=min_server):
+                                server.logger.debug(f'Server: {server.id} notified by scheduler to enqueue task: {probe.task.id}. Simulation time: {server.simulation.time}.')
+                                probe.target_states[server] = probe.States.server_ready
+                                server.control()
+                            event = scheduler.cluster.network.delay(
+                                enqueue_task, logging_message = f'Notify server: {min_server.id} to enqueue task: {probe.task.id}. Simulation time: {scheduler.simulation.time}.'
+                            )
+                            scheduler.simulation.event_queue.put(
+                                event
+                            )
+                            other_servers = [other_server for other_server in probe.server_queue_lengths if other_server is not min_server]
+                            for other_server in other_servers:
+                                def reject_task(probe = probe, server = other_server):
+                                    server.logger.debug(f'Server: {server.id} notified by scheduler to reject task: {probe.task.id}. Simulation time: {server.simulation.time}.')
+                                    probe.target_states[server] = probe.States.terminated
+                                    server.control()
+                                event = scheduler.cluster.network.delay(
+                                    reject_task, logging_message = f'Notify server: {other_server.id} to reject task: {probe.task.id}. Simulation time: {scheduler.simulation.time}.'
+                                )
+                                scheduler.simulation.event_queue.put(
+                                    event
+                                )
+                    case probe.States.terminated:
+                        pass
+                    case probe.States.server_probed:
+                        pass
+                    case probe.States.server_ready:
+                        pass         
+                    case probe.States.server_executing_task:
+                        pass
+                    case probe.States.task_finished:
+                        pass
+
     class Server:
         class Queue:
             def block(scheduler, task, server):
@@ -414,51 +455,12 @@ class SparrowScheduler:
                 server.control()
 
         class Control:
-            def sampling_server_control(probe, target):
-                server = target
+            def sampling_server_control(probe, server):
+                server.logger.debug(f'Server entered control loop for probe: {probe.id}, in state: {probe.target_states[server]}. Simulation time: {probe.simulation.time}.')
                 match probe.target_states[server]:
-                    case probe.states.blocked:
-                        probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state{ probe.states.blocked}, simulation time: {probe.simulation.time}.')
-                    case probe.states.server_probed:
-                        # Server probed needs to be idempotent.
-                        probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_probed}, simulation time: {probe.simulation.time}')
-                        def update_probe(probe=probe, server=server):
-                            server.logger.debug(f'Update server: {server.id}, to state: {probe.states.server_ready}, for task {probe.task.id}. Simulation time: {probe.simulation.time}.')
-                            probe.target_states[server] = probe.states.server_ready
-                            probe.server_enqueue_task(server)
-                        event = server.network.delay(
-                            update_probe, logging_message=f'Notify probe, that server: {server.id} is ready for task: {probe.task.id}.'
-                        )
-                        probe.simulation.event_queue.put(
-                            event
-                        )
-                        probe.target_states[server] = probe.states.blocked
-                    case probe.states.server_ready:
-                        # Server probe blocks in ready state until notified by probe.
-                        probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_ready}, simulation time: {probe.simulation.time}.')
-                    case probe.states.server_executing_task:
-                        if server.busy_until == probe.simulation.time:
-                            # If the server is currently idle.
-                            probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_executing_task}, simulation time: {probe.simulation.time}')
-                            event = server.enqueue_task(probe.task)
-                            probe.simulation.event_queue.put(
-                                event
-                            )
-                            probe.target_states[server] = probe.states.task_finished 
-                    case probe.states.task_finished:
-                        if server.busy_until == probe.simulation.time:
-                            # If the server is currently idle.
-                            probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.task_finished}, simulation time: {probe.simulation.time}')
-                            try:
-                                server.stop_task_event(probe.task)
-                            except KeyError:
-                                pass
-                            else:
-                                pass
-                            finally:
-                                probe.unbind(server)
-                    case probe.states.terminated:
-                        probe.logger.debug(f'Server: {target.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.terminated}, simulation time: {probe.simulation.time}')
+                    case probe.States.blocked:
+                        pass
+                    case probe.States.terminated:
                         try:
                             server.stop_task_event(probe.task)
                         except KeyError:
@@ -466,7 +468,38 @@ class SparrowScheduler:
                         else:
                             pass
                         finally:
-                            probe.unbind(server)        
+                            probe.unbind(server)
+                    case probe.States.server_probed:
+                        def probe_reply(probe=probe, server=server, queue_length=len(server.tasks)):
+                            scheduler, = tuple(target for target in probe.target_states if target.__class__.__name__ == 'Scheduler')
+                            probe.server_queue_lengths[server] = queue_length
+                            probe_coroutine = scheduler.probe_coroutines[probe]
+                            probe_coroutine.send(server)
+                        event = server.network.delay(
+                            probe_reply, logging_message=f'Reply to Sparrow Probe on server: {server.id}, current queue length: {len(server.tasks)}. Simulation time: {server.simulation.time}.'
+                        )
+                        server.simulation.event_queue.put(
+                            event
+                        )
+                        probe.target_states[server] = probe.States.blocked
+                    case probe.States.server_ready:
+                        if server.busy_until == server.simulation.time:
+                            event = server.enqueue_task(probe.task)
+                            probe.simulation.event_queue.put(
+                                event
+                            )
+                            probe.target_states[server] = probe.States.server_executing_task
+                    case probe.States.server_executing_task:
+                        pass
+                    case probe.States.task_finished:
+                        try:
+                            server.stop_task_event(probe.task)
+                        except KeyError:
+                            pass
+                        else:
+                            pass
+                        finally:
+                            probe.unbind(server)
 
             def late_binding_server_control(probe, server):
                 match probe.target_states[server]:
@@ -596,7 +629,11 @@ class SparrowScheduler:
                     def probe_coroutine(probe = probe, scheduler = scheduler):
                         while True:
                             server = yield
-                            SparrowScheduler.Scheduler.Control.scheduler_probe_control(probe, server, scheduler)
+                            late_binding = scheduler.scheduler_enqueuing_params['late_binding']
+                            if late_binding.lower() == 'true':
+                                SparrowScheduler.Scheduler.Control.scheduler_late_binding_probe_control(probe, server, scheduler)
+                            else:
+                                SparrowScheduler.Scheduler.Control.scheduler_sampling_probe_control(probe, server, scheduler)
                     try:
                         probe_coroutines = scheduler.probe_coroutines
                     except AttributeError:
@@ -702,7 +739,6 @@ class SparrowScheduler:
                     self.bindings.add(target)
                     self.target_states[target] = self.states.server_probed
                     self.server_arrival_times[target] = self.simulation.time
-                    self.server_queue_lengths[target] = len(target.tasks)
                     self.logger.debug(
                         f'Server: {target.id} bound to SparrowProbe: {self.id}, for task {self.task.id}. Registering arrival time {self.simulation.time}. Simulation time: { self.simulation.time}.'
                     )
@@ -1200,7 +1236,6 @@ class LatinSquareScheduler:
                 for target in targets:
                     self.unbind(target)
 
-
 class RoundRobinScheduler:
     """
     Round Robin Scheduling Methods
@@ -1430,7 +1465,3 @@ class RoundRobinScheduler:
                 while self in scheduler.controls:
                     scheduler.controls.remove(self)
                 
-
-
-
-
