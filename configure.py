@@ -815,9 +815,15 @@ class LatinSquareScheduler:
                 scheduler.logger.debug(
                     f'Scheduler has been notified that task: {task.id} has been completed on server: {server.id}. Simulation time: {scheduler.simulation.time}.'
                 )
-                control, = tuple(control for control in scheduler.controls if control.__class__.__name__ == 'LatinSquareControl' and control.task is task)
-                control.target_states[scheduler] = control.States.task_finished
-                scheduler.control()
+                try:
+                    control, = tuple(control for control in scheduler.controls if control.__class__.__name__ == 'LatinSquareControl' and control.task is task)
+                except ValueError:
+                    # Multiple servers completed the same task. The first task completion finished the job, and so subsequent task completion notifications
+                    # are ignored.
+                    pass
+                else:
+                    control.target_states[scheduler] = control.States.task_finished
+                    scheduler.control()
 
         class Control:
             def scheduler_coroutine_control(control, scheduler, server=None):
@@ -828,8 +834,9 @@ class LatinSquareScheduler:
                         pass
                     case control.States.server_enqueued:
                         pass
-                    case control.states.server_executing_task:
-                        control.target_states[scheduler] = control.States.server_executing_task
+                    case control.States.server_executing_task:
+                        if control.target_states[scheduler] == control.States.server_enqueued:
+                            control.target_states[scheduler] = control.States.server_executing_task
                         if control.task.is_finished:
                             def preempt_task(control = control, server = server):
                                 server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has already been completed. Simulation time: {control.simulation.time}.')
@@ -849,7 +856,9 @@ class LatinSquareScheduler:
                     case control.States.blocked:
                         pass
                     case control.States.terminated:
-                        pass
+                        if len(control.bindings) == 1:
+                            control.unbind(scheduler)
+                            del scheduler.control_coroutines[control]
                     case control.States.server_enqueued:
                         pass
                     case control.States.server_executing_task:
@@ -898,11 +907,10 @@ class LatinSquareScheduler:
                             )
                         batch_control.target_states[scheduler] = batch_control.States.enqueued
                     case batch_control.States.enqueued:
-                        task_finished_flags = [control.task.is_finished for control in batch_control.controls]
-                        if all(task_finished_flags):
-                            bindings = set(binding for control in batch_control.controls for binding in control.bindings)
-                            if len(bindings) == 1:
-                                batch_control.unbind(scheduler)
+                        if all(control.task.is_finished for control in batch_control.controls):
+                            batch_control.unbind(scheduler)
+
+                            
 
     class Server:
         class Queue:
@@ -1009,18 +1017,23 @@ class LatinSquareScheduler:
                         finally:
                             control.unbind(server)
                     case control.States.server_enqueued:
-                        if server.busy_until == server.simulation.time:
+                        if server.is_idle:
                             latin_square_controls = [control for control in server.controls if control.__class__.__name__ == 'LatinSquareControl']
                             earliest_control = control
                             if len(latin_square_controls) > 0:
                                 min_control = min(latin_square_controls, key=lambda control: control.server_arrival_times[server])
-                                if earliest_control.server_arrival_times[server] < min_control.server_arrival_times[server]:
+                                if earliest_control.server_arrival_times[server] > min_control.server_arrival_times[server]:
                                     earliest_control = min_control
                             if earliest_control is control:
                                 def notify_scheduler(control=control, server=server):
-                                    scheduler, = tuple(control for control in control.bindings if control.__class__.__name__ == 'Scheduler')
-                                    scheduler.logger.debug(f'Received message from server: {server.id} that task: {control.task.id} has been enqueued. Simulation time: {control.simulation.time}.')
-                                    scheduler.control_coroutines[control].send(server)
+                                    try:
+                                        scheduler, = tuple(control for control in control.bindings if control.__class__.__name__ == 'Scheduler')
+                                    except ValueError:
+                                        # Task preempted from server before this message arrived at the scheduler.
+                                        pass
+                                    else:
+                                        scheduler.logger.debug(f'Received message from server: {server.id} that task: {control.task.id} has been enqueued. Simulation time: {control.simulation.time}.')
+                                        scheduler.control_coroutines[control].send(server)
                                 event = server.network.delay(
                                     notify_scheduler, logging_message=f'Send message to scheduler, server: {server.id}, has enqueued task: {control.task.id}. Simulation time: {control.simulation.time}.'
                                 )
@@ -1232,8 +1245,6 @@ class LatinSquareScheduler:
                 self.bindings.discard(scheduler)
                 while self in scheduler.controls:
                     scheduler.controls.remove(self)
-                if len(self.bindings) == 0:
-                    self.batch_control.unbind(scheduler)
 
 
             def __del__(self):

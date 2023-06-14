@@ -30,19 +30,24 @@ class Server(ServerClass):
         self.completion_process = CompletionProcess(simulation)
         self.max_queue_length = int(simulation.CONFIGURATION['Computer.Cluster.Server']['MAX_QUEUE_LENGTH'])
         self.controls = deque()
+        
         self.idle_time_triggers = {'idle_start_time': 0, 'idle_stop_time': 0}
         self.idle_start_times = set()
         self.idle_stop_times = set()
         self.cumulative_idle_time = 0
         self.cumulative_busy_time = 0
 
+        self._last_idle_check_time = self.simulation.time
+        self._memoized_tasks = {}
+        self._memoized_busy_until = self.simulation.time
+
     @property
     def busy_until(self):
-        events = [self.tasks[task] for task in list(self.tasks)]
-        if len(events) == 0:
+        if len(self.tasks) == 0:
             self.logger.debug(f'server: {self.id} is currently idle. Simulation Time: {self.simulation.time}')
             return self.simulation.time
         else:
+            events = [self.tasks[task] for task in self.tasks]
             max_event = max(events)
             if max_event.arrival_time > self.simulation.time:
                 time = max_event.arrival_time
@@ -53,6 +58,16 @@ class Server(ServerClass):
                 time = self.simulation.time
                 self.logger.debug(f'server: {self.id} is currently idle. Simulation time: {self.simulation.time}')
                 return time
+            
+    @property
+    def is_idle(self):
+        if self._last_idle_check_time == self.simulation.time and self._memoized_tasks == self.tasks:
+            return self._memoized_busy_until == self.simulation.time
+        else:
+            self._last_idle_check_time = self.simulation.time
+            self._memoized_tasks = {task: self.tasks[task] for task in self.tasks}
+            self._memoized_busy_until = self.busy_until
+            return self._memoized_busy_until == self.simulation.time
     
     @property
     def id(self):

@@ -71,11 +71,9 @@ class ControlClass(ABC):
     @staticmethod
     def cleanup_control(fn):
         def func(*args):
-            control = args[0]
             fn(*args)
-            target = args[1]
-            if target in control.bindings and control not in target.controls:
-                # control.logger.debug(f'{control}: {control.id}, Cleanup Loop: rebinding to {target}, {target.id}. Simulation Time: {control.simulation.time}')
+            control, target = (args[0], args[1])
+            if control not in target.controls and target in control.bindings:
                 target.add_control(control)
         return func
 
