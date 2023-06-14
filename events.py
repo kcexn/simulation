@@ -129,15 +129,7 @@ class TaskCompletion(Completion):
             self.logger.debug(f'Task {self.id} has already been completed. Simulation Time: {self.simulation.time}')
         else:
             self.server.logger.debug(f'Task: {self.task.id} has finished at time: {self.simulation.time}.')
-            def scheduler_complete_task(scheduler=self.simulation.scheduler, task=self.task, server=self.server):
-                scheduler.complete_task(task, server=server)
-            self.simulation.event_queue.put(
-                self.server.network.delay(
-                    scheduler_complete_task, logging_message=f'Send message to scheduler from server: {self.server.id}, to complete task: {self.task.id}. Simulation Time: {self.simulation.time}.'
-                )
-            )
             self.server.complete_task(self.task)
-            # self.simulation.scheduler.complete_task(self.task)
 
     def __repr__(self):
         return "TaskCompletion"

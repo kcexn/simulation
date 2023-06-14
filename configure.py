@@ -560,6 +560,16 @@ class SparrowScheduler:
                             pass
                         finally:
                             probe.unbind(server)
+                            scheduler, = tuple(target for target in probe.target_states if target.__class__.__name__ == 'Scheduler')
+                            def scheduler_complete_task(scheduler=scheduler, task=probe.task, server=server):
+                                scheduler.logger.debug(f'Notified by server: {server.id}, that task: {task.id} is complete. Simulation time: {scheduler.simulation.time}.')
+                                scheduler.complete_task(task, server=server)
+                            server.simulation.event_queue.put(
+                                server.network.delay(
+                                    scheduler_complete_task, logging_message=f'Server: {server.id} to notify scheduler that task: {probe.task.id} is complete. Simulation Time: {server.simulation.time}.'
+                                )
+                            )   
+
 
             def server_control(probe, target):
                 try:
@@ -1032,6 +1042,15 @@ class LatinSquareScheduler:
                             pass
                         finally:
                             control.unbind(server)
+                            scheduler, = tuple(target for target in control.target_states if target.__class__.__name__ == 'Scheduler')
+                            def scheduler_complete_task(scheduler=scheduler, task=control.task, server=server):
+                                scheduler.logger.debug(f'Notified by server: {server.id}, that task: {task.id} is complete. Simulation time: {scheduler.simulation.time}.')
+                                scheduler.complete_task(task, server=server)
+                            server.simulation.event_queue.put(
+                                server.network.delay(
+                                    scheduler_complete_task, logging_message=f'Server: {server.id} to notify scheduler that task: {control.task.id} is complete. Simulation Time: {server.simulation.time}.'
+                                )
+                            )                            
 
             def server_control(control, server):
                 LatinSquareScheduler.Server.Control.latin_square_server_control(control, server)
@@ -1317,6 +1336,15 @@ class RoundRobinScheduler:
                         server.logger.debug(f'Finished executing task: {control.task.id}, on Server: {server.id}. Simulation time: {server.simulation.time}.')
                         server.stop_task_event(control.task)
                         control.unbind(server)
+                        scheduler, = tuple(target for target in control.target_states if target.__class__.__name__ == 'Scheduler')
+                        def scheduler_complete_task(scheduler=scheduler, task=control.task, server=server):
+                            scheduler.logger.debug(f'Notified by server: {server.id}, that task: {task.id} is complete. Simulation time: {scheduler.simulation.time}.')
+                            scheduler.complete_task(task, server=server)
+                        server.simulation.event_queue.put(
+                            server.network.delay(
+                                scheduler_complete_task, logging_message=f'Send message to scheduler from server: {server.id}, to complete task: {control.task.id}. Simulation Time: {server.simulation.time}.'
+                            )
+                        )
                         # Should put the task finished notification in here. But first need to decouple it from the event loop which means modifying
                         # the code for all of the other schedulers.
 
