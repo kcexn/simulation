@@ -328,13 +328,11 @@ class SparrowScheduler:
 
             def scheduler_late_binding_probe_control(probe, server, scheduler):
                 match probe.target_states[server]:
-                    case probe.States.blocked:
-                        pass
                     case probe.States.terminated:
                         pass
                     case probe.States.server_probed:
                         pass
-                    case probe.States.server_ready:
+                    case probe.States.server_ready | probe.States.blocked:
                         notify_server = None
                         message = None
                         batch_control = probe.batch_control
@@ -517,7 +515,7 @@ class SparrowScheduler:
                             probe.unbind(server)
                     case probe.States.server_probed:
                         probe.logger.debug(f'Server: {server.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_probed}, simulation time: {probe.simulation.time}')
-                        if server.busy_until == server.simulation.time:
+                        if server.is_idle:
                             probes_on_server = [control for control in server.controls if control.__class__.__name__ == 'SparrowProbe']
                             earliest_probe = probe
                             if len(probes_on_server) > 0:
@@ -533,13 +531,13 @@ class SparrowScheduler:
                                     notify_scheduler, logging_message=f'Send message to scheduler, ready to enqueue task: {probe.task.id} on server {server.id}. Simulation Time: {probe.simulation.time}'
                                 )
                                 server.start_task_event(probe.task, event) # Block server execution loop.
-                                probe.target_states[server] = probe.states.server_ready
+                                probe.target_states[server] = probe.states.server_ready # Block control state.
                                 probe.simulation.event_queue.put(
                                     event
                                 )
                     case probe.States.server_ready:
                         probe.logger.debug(f'Server: {server.id}, control loop for Sparrow Probe: {probe.id}, state: {probe.states.server_ready}, simulation time: {probe.simulation.time}')
-                        if server.busy_until == probe.simulation.time:
+                        if server.is_idle:
                             event = server.enqueue_task(probe.task)
                             probe.simulation.event_queue.put(
                                 event

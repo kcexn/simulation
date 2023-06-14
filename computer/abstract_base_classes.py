@@ -72,8 +72,8 @@ class ControlClass(ABC):
     def cleanup_control(fn):
         def func(*args):
             fn(*args)
-            control, target = (args[0], args[1])
-            if control not in target.controls and target in control.bindings:
+            control, target = tuple(args)
+            if target in control.bindings:
                 target.add_control(control)
         return func
 
