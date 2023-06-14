@@ -948,60 +948,6 @@ class LatinSquareScheduler:
                     server.control()
 
         class Control:
-            def sampling_server_control(control, target):
-                server = target
-                match control.target_states[server]:
-                    case control.states.blocked:
-                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state{ control.states.blocked}, simulation time: {control.simulation.time}.')
-                    case control.states.server_enqueued:
-                        # Server control needs to be idempotent.
-                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_enqueued}, simulation time: {control.simulation.time}')
-                        def update_control(control=control, server=server):
-                            server.logger.debug(f'Update server: {server.id}, to state: {control.states.server_ready}, for task {control.task.id}. Simulation time: {control.simulation.time}.')
-                            control.target_states[server] = control.states.server_ready
-                            control.server_enqueue_task(server)
-                        event = server.network.delay(
-                            update_control, logging_message=f'Notify control, that server: {server.id} is ready for task: {control.task.id}.'
-                        )
-                        control.simulation.event_queue.put(
-                            event
-                        )
-                        control.target_states[server] = control.states.blocked
-                    case control.states.server_ready:
-                        # Server control blocks in ready state until notified by control.
-                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_ready}, simulation time: {control.simulation.time}.')
-                    case control.states.server_executing_task:
-                        if server.busy_until == control.simulation.time:
-                            # If the server is currently idle.
-                            control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.server_executing_task}, simulation time: {control.simulation.time}')
-                            event = server.enqueue_task(control.task)
-                            control.simulation.event_queue.put(
-                                event
-                            )
-                            control.target_states[server] = control.states.task_finished 
-                    case control.states.task_finished:
-                        if server.busy_until == control.simulation.time:
-                            # If the server is currently idle.
-                            control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.task_finished}, simulation time: {control.simulation.time}')
-                            try:
-                                server.stop_task_event(control.task)
-                            except KeyError:
-                                server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
-                            else:
-                                pass
-                            finally:
-                                control.unbind(server)
-                    case control.states.terminated:
-                        control.logger.debug(f'Server: {target.id}, control loop for LatinSquare control: {control.id}, state: {control.states.terminated}, simulation time: {control.simulation.time}')
-                        try:
-                            server.stop_task_event(control.task)
-                        except KeyError:
-                            server.logger.debug(f'Task: {control.task.id}, already cleared from server: {server.id}. Simulation time: {server.simulation.time}.')
-                        else:
-                            pass
-                        finally:
-                            control.unbind(server)    
-
             def latin_square_server_control(control, server):
                 server.logger.debug(f'Server: {server.id}, entered control loop for task: {control.task.id}; currently in state: {control.target_states[server]}. Simulation time: {server.simulation.time}.')
                 match control.target_states[server]:
@@ -1022,7 +968,7 @@ class LatinSquareScheduler:
                             earliest_control = control
                             if len(latin_square_controls) > 0:
                                 min_control = min(latin_square_controls, key=lambda control: control.server_arrival_times[server])
-                                if earliest_control.server_arrival_times[server] > min_control.server_arrival_times[server]:
+                                if min_control.server_arrival_times[server] < control.server_arrival_times[server]:
                                     earliest_control = min_control
                             if earliest_control is control:
                                 def notify_scheduler(control=control, server=server):
