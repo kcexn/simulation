@@ -83,8 +83,7 @@ class ServerSelectionPolicies:
         while True:
             random_servers = cluster.random_choice.choose_from(cluster.servers, num_samples)
             cluster.logger.debug(f'yielding servers: {[server.id for server in iter(random_servers)]}. Simulation Time: {cluster.simulation.time}')
-            for server in iter(random_servers):
-                yield server
+            yield from iter(random_servers)
 
     def server_selection(fn):
         def func(*args): 
@@ -143,9 +142,11 @@ class BlockingPolicies:
             scheduler = args[0]
             match scheduler.POLICY:
                 case 'Sparrow':
-                    SparrowScheduler.Server.Queue.block(*args)
+                    # SparrowScheduler.Server.Queue.block(*args)
+                    pass
                 case 'LatinSquare':
-                    LatinSquareScheduler.Server.Queue.block(*args)
+                    # LatinSquareScheduler.Server.Queue.block(*args)
+                    pass
                 case 'RoundRobin':
                     pass
                 case _:
@@ -473,8 +474,7 @@ class SparrowScheduler:
                         def probe_reply(probe=probe, server=server, queue_length=len(server.tasks)):
                             scheduler, = tuple(target for target in probe.target_states if target.__class__.__name__ == 'Scheduler')
                             probe.server_queue_lengths[server] = queue_length
-                            probe_coroutine = scheduler.probe_coroutines[probe]
-                            probe_coroutine.send(server)
+                            scheduler.probe_coroutines[probe].send(server)
                         event = server.network.delay(
                             probe_reply, logging_message=f'Reply to Sparrow Probe on server: {server.id}, current queue length: {len(server.tasks)}. Simulation time: {server.simulation.time}.'
                         )
@@ -526,10 +526,9 @@ class SparrowScheduler:
                                     earliest_probe = early_probe
                             if earliest_probe is probe:
                                 def notify_scheduler(probe = probe, server = server):
-                                    server.logger.debug(f'Send message to Scheduler that server: {server.id} is ready to enqueue task: {probe.task.id}. Simulation time: {probe.simulation.time}.')
-                                    scheduler = probe.simulation.scheduler
-                                    probe_coroutine = scheduler.probe_coroutines[probe]
-                                    probe_coroutine.send(server)
+                                    scheduler, = tuple(target for target in probe.target_states if target.__class__.__name__ == 'Scheduler')
+                                    scheduler.logger.debug(f'Received message from server: {server.id}, that it has enqueued task: {probe.task.id}. Simulation time: {scheduler.simulation.time}.')
+                                    scheduler.probe_coroutines[probe].send(server)
                                 event = server.network.delay(
                                     notify_scheduler, logging_message=f'Send message to scheduler, ready to enqueue task: {probe.task.id} on server {server.id}. Simulation Time: {probe.simulation.time}'
                                 )
@@ -985,7 +984,8 @@ class LatinSquareScheduler:
                         finally:
                             control.unbind(server)    
 
-            def late_binding_server_control(control, server):
+            def latin_square_server_control(control, server):
+                server.logger.debug(f'Server: {server.id}, entered control loop for task: {control.task.id}; currently in state: {control.target_states[server]}. Simulation time: {server.simulation.time}.')
                 match control.target_states[server]:
                     case control.States.blocked:
                         pass
@@ -1034,21 +1034,7 @@ class LatinSquareScheduler:
                             control.unbind(server)
 
             def server_control(control, server):
-                try:
-                    server_control_params = control.simulation.server_control_params
-                except AttributeError:
-                    server_control_params = {
-                        'late_binding': control.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATE_BINDING']
-                    }
-                    control.simulation.server_control_params = server_control_params
-                else:
-                    pass
-                finally:
-                    late_binding = server_control_params['late_binding']
-                    if late_binding.lower() == 'false':
-                        LatinSquareScheduler.Server.Control.sampling_server_control(control, server)
-                    else:
-                        LatinSquareScheduler.Server.Control.late_binding_server_control(control, server)
+                LatinSquareScheduler.Server.Control.latin_square_server_control(control, server)
                   
     class Controls:
         if not __package__:

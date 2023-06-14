@@ -191,7 +191,6 @@ class Scheduler(SchedulerClass):
     def __init__(self, simulation):
         self.simulation = simulation
         self.POLICY = simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
-        self.LATIN_SQUARE = array(latin_square(int(simulation.CONFIGURATION['Computer.Scheduler']['LATIN_SQUARE_ORDER'])))
         self.logger.info(f'Scheduling Policy: {self.POLICY}, Latin Square: {self.LATIN_SQUARE}')
         self.cluster = Cluster(simulation)
         self.arrival_process = ArrivalProcess(simulation)
