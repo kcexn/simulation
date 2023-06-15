@@ -9,7 +9,51 @@ def configuration(filename='./configuration.ini'):
     config.read(filename)
     return config
 
-#TODO: Implement Sparrow Latin Square Hybrid. Tolerate Worker Failures, Improve Response Times. Handle Heterogeneous Task Sizes.
+class ArrivalProcessPolicies:
+    class JobArrivalPolicies:
+        def erlang_arrivals(arrival_process):
+            if not __package__:
+                from work import Task
+            else:
+                from .work import Task
+            num_tasks = arrival_process.NUM_TASKS
+            tasks = []
+            for _ in range(num_tasks):
+                arrival_process._arrival_time += next(arrival_process.interrenewal_times)
+                task = Task(arrival_process.simulation)
+                task.start_time = arrival_process._arrival_time
+                tasks.append(task)
+            return tasks
+
+        def exponential_arrivals(arrival_process):
+            if not __package__:
+                from work import Task
+            else:
+                from .work import Task
+            num_tasks = arrival_process.NUM_TASKS
+            arrival_process._arrival_time += next(arrival_process.interrenewal_times)
+            tasks = [Task(arrival_process.simulation) for _ in range(num_tasks)]
+            for task in tasks:
+                task.start_time = arrival_process._arrival_time
+            return tasks
+
+        def job_arrival_policy(arrival_process):
+            try:
+                arrival_process_params = arrival_process.PARAMS
+            except AttributeError:
+                arrival_process_params = {
+                    'job_arrival_policy': arrival_process.simulation.CONFIGURATION['Processes.Arrival.Job']['POLICY']
+                }
+                arrival_process.PARAMS = arrival_process_params
+            else:
+                pass
+            finally:
+                match arrival_process_params['job_arrival_policy']:
+                    case 'Erlang':
+                        return ArrivalProcessPolicies.JobArrivalPolicies.erlang_arrivals(arrival_process)
+                    case 'Exponential':
+                        return ArrivalProcessPolicies.JobArrivalPolicies.exponential_arrivals(arrival_process)
+
 
 class SchedulingPolicies:
 

@@ -85,19 +85,16 @@ class ArrivalProcess(Process):
         self._arrival_time = float(self.simulation.CONFIGURATION['Processes.Arrival']['INITIAL_TIME'])
         self._SCALE = float(self.simulation.CONFIGURATION['Processes.Arrival']['SCALE'])
         self.logger.debug(f'Initial Arrival Time: {self._arrival_time}, num_tasks: {self.NUM_TASKS}, scale: {self._SCALE}')
-
-    def job(self, tasks=[]):
-        return JobArrival(self.simulation, self.simulation.time, tasks)
     
+
     @property
     def jobs(self):
+        if not __package__:
+            from configure import ArrivalProcessPolicies
+        else:
+            from .configure import ArrivalProcessPolicies
         while True:
-            tasks = []
-            for _ in range(self.NUM_TASKS):
-                self._arrival_time = self._arrival_time + next(self.interrenewal_times)
-                task = Task(self.simulation)
-                task.start_time = self._arrival_time
-                tasks.append(task)
+            tasks = ArrivalProcessPolicies.JobArrivalPolicies.job_arrival_policy(self)
             yield JobArrival(self.simulation, self._arrival_time, tasks=tasks)
  
 
