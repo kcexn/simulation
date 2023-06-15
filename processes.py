@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 from numpy import random
 
 if not __package__:
@@ -34,8 +35,10 @@ class RandomChoice(Process):
         super(RandomChoice, self).__init__(simulation)
 
     def choose_from(self, array, num_choices):
-        return self.rng.choice(array, size = num_choices, replace=False)
-    
+        indices = np.arange(len(array))
+        while True:
+            yield from (array[i] for i in self.rng.choice(indices, num_choices, replace=False, shuffle=False))
+
 class NetworkDelayProcess(Process):
     """Generate Network Delays"""
     logger = logging.getLogger('Process.NetworkDelayProcess')

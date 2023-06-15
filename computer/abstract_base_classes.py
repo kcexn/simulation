@@ -72,7 +72,7 @@ class ControlClass(ABC):
     def cleanup_control(fn):
         def func(*args):
             fn(*args)
-            control, target = tuple(args)
+            control, target = args
             if target in control.bindings:
                 target.add_control(control)
         return func

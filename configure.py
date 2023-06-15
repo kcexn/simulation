@@ -81,9 +81,7 @@ class ServerSelectionPolicies:
     def random(cluster, num_samples):
         """Select a subset of servers randomly, and cycle through them."""
         while True:
-            random_servers = cluster.random_choice.choose_from(cluster.servers, num_samples)
-            cluster.logger.debug(f'yielding servers: {[server.id for server in iter(random_servers)]}. Simulation Time: {cluster.simulation.time}')
-            yield from iter(random_servers)
+            yield from cluster.random_choice.choose_from(cluster.servers, num_samples)
 
     def server_selection(fn):
         def func(*args): 
@@ -851,15 +849,7 @@ class LatinSquareScheduler:
 
             def scheduler_control(control, scheduler):
                 match control.target_states[scheduler]:
-                    case control.States.blocked:
-                        pass
-                    case control.States.terminated:
-                        if len(control.bindings) == 1:
-                            control.unbind(scheduler)
-                            del scheduler.control_coroutines[control]
-                    case control.States.server_enqueued:
-                        pass
-                    case control.States.server_executing_task:
+                    case control.States.server_enqueued | control.States.blocked | control.States.server_executing_task:
                         pass
                     case control.States.task_finished:
                         servers = [target for target in control.target_states if target.__class__.__name__ == 'Server']
@@ -878,14 +868,18 @@ class LatinSquareScheduler:
                                 event
                             )
                             control.target_states[scheduler] = control.States.terminated
+                    case control.States.terminated:
+                        if len(control.bindings) == 1:
+                            control.unbind(scheduler)
+                            del scheduler.control_coroutines[control]
+
 
             def scheduler_batch_control(batch_control, scheduler):
                 from collections import deque
                 match batch_control.target_states[scheduler]:
-                    case batch_control.States.blocked:
-                        pass
-                    case batch_control.States.terminated:
-                        pass
+                    case batch_control.States.enqueued:
+                        if all(len(control.bindings)==0 for control in batch_control.controls):
+                            batch_control.unbind(scheduler)
                     case batch_control.States.unenqueued:
                         scheduling_params = scheduler.SCHEDULING_PARAMS
                         order = int(scheduling_params['latin_square_order'])
@@ -904,11 +898,9 @@ class LatinSquareScheduler:
                                 event
                             )
                         batch_control.target_states[scheduler] = batch_control.States.enqueued
-                    case batch_control.States.enqueued:
-                        if all(control.task.is_finished for control in batch_control.controls):
-                            batch_control.unbind(scheduler)
-
-                            
+                    case batch_control.States.blocked | batch_control.States.terminated:
+                        pass
+                          
 
     class Server:
         class Queue:
