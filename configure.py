@@ -304,7 +304,10 @@ class SparrowScheduler:
 
         class Executor:
             def task_complete(scheduler, task, server=None):
-                pass
+                probe, = tuple(probe for probe in scheduler.controls if probe.__class__.__name__ == 'SparrowProbe' and probe.task is task)
+                batch_control = probe.batch_control
+                if all(probe.task.is_finished for probe in batch_control.probes):
+                    batch_control.target_states[scheduler] = batch_control.States.terminated
 
             def enqueue_tasks_in_batch(scheduler, batch_control):
                 """Enqueue batches of tasks scheduling"""
@@ -358,15 +361,16 @@ class SparrowScheduler:
                     case batch_control.States.blocked:
                         pass
                     case batch_control.States.terminated:
-                        batch_control.unbind(scheduler)
+                        bindings = set(binding for probe in batch_control.probes for binding in probe.bindings)
+                        if len(bindings) == 1:
+                            for probe in batch_control.probes:
+                                probe.unbind(scheduler)
+                            batch_control.unbind(scheduler)
                     case batch_control.States.batch_unenqueued:
                         SparrowScheduler.Scheduler.Executor.enqueue_tasks_in_batch(scheduler, batch_control)
                         batch_control.target_states[scheduler] = batch_control.States.batch_enqueued
                     case batch_control.States.batch_enqueued:
-                        if all(probe.task.is_finished for probe in batch_control.probes):
-                            bindings = set(binding for probe in batch_control.probes for binding in probe.bindings)
-                            if len(bindings) == 1:
-                                batch_control.unbind(scheduler)
+                        pass
 
             def scheduler_late_binding_probe_control(probe, server, scheduler):
                 match probe.target_states[server]:
@@ -711,9 +715,6 @@ class SparrowScheduler:
                 for probe in self.probes:
                     del scheduler.probe_coroutines[probe]
 
-            def __del__(self):
-                self.probes.clear()
-
         class SparrowProbe(ControlClass):
             """Sparrow Scheduler Probe"""
             from enum import IntEnum
@@ -912,6 +913,9 @@ class LatinSquareScheduler:
                                 event
                             )
                             control.target_states[scheduler] = control.States.terminated
+                        batch_control = control.batch_control
+                        if all(control.task.is_finished for control in batch_control.controls):
+                            batch_control.target_states[scheduler] = batch_control.States.terminated
                     case control.States.terminated:
                         if len(control.bindings) == 1:
                             control.unbind(scheduler)
@@ -922,8 +926,7 @@ class LatinSquareScheduler:
                 from collections import deque
                 match batch_control.target_states[scheduler]:
                     case batch_control.States.enqueued:
-                        if all(len(control.bindings)==0 for control in batch_control.controls):
-                            batch_control.unbind(scheduler)
+                        pass
                     case batch_control.States.unenqueued:
                         scheduling_params = scheduler.SCHEDULING_PARAMS
                         order = int(scheduling_params['latin_square_order'])
@@ -942,7 +945,10 @@ class LatinSquareScheduler:
                                 event
                             )
                         batch_control.target_states[scheduler] = batch_control.States.enqueued
-                    case batch_control.States.blocked | batch_control.States.terminated:
+                    case batch_control.States.terminated:
+                        if scheduler not in set(binding for control in batch_control.controls for binding in control.bindings):
+                            batch_control.unbind(scheduler)
+                    case batch_control.States.blocked:
                         pass
                           
 
