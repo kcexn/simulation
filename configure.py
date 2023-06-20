@@ -1233,7 +1233,7 @@ class RoundRobinScheduler:
                 for batch in batches:
                     batch_control = RoundRobinScheduler.Controls.RoundRobinBatch(scheduler.simulation, batch)
                     batch_control.bind(scheduler)
-                    scheduler.control()
+                scheduler.control()
 
         class Executor:
             def complete_task(scheduler, task, server=None):
