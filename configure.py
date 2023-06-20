@@ -97,7 +97,7 @@ class SchedulingPolicies:
             for task in batch:
                 schedule_task(task,server)
         scheduler.simulation.event_queue.put(
-            scheduler.cluster.network.delay(
+            scheduler.network.delay(
                 schedule_tasks, logging_message=f'Send tasks {[task for task in batch]} to be scheduled on server {server.id}. Simulation Time: {scheduler.simulation.time}.'
             )
         )
@@ -256,7 +256,7 @@ class SchedulerTaskCompletionPolicies:
         scheduler.logger.info(f'Task {task.id}, finished at time: {task.finish_time}.')
         for server in scheduler.cluster.servers:
             scheduler.simulation.event_queue.put(
-                scheduler.cluster.network.delay(
+                scheduler.network.delay(
                     server.complete_task,task, logging_message=f'Send message to server: {server.id} to preempt task: {task.id}. Simulation Time: {scheduler.simulation.time}'
                 )
             )
@@ -331,7 +331,7 @@ class SparrowScheduler:
                                 probe.bind(server)
                             server.control()
                         scheduler.simulation.event_queue.put(
-                            scheduler.cluster.network.delay(
+                            scheduler.network.delay(
                                 enqueue_tasks, logging_message=f'Send batch: {[probe.task for probe in probes]} to be scheduled on server {server.id}. Simulation time: {scheduler.simulation.time}.'
                             )
                         )
@@ -349,7 +349,7 @@ class SparrowScheduler:
                             probe.target_states[other_server] = probe.States.terminated
                         other_server.control()
                     probe.simulation.event_queue.put(
-                        scheduler.cluster.network.delay(
+                        scheduler.network.delay(
                             preempt, logging_message=f'Preempt probe: {probe.id}, task: {probe.task.id}, on server: {other_server.id}. Simulation time: {probe.simulation.time}.'
                         )
                     )
@@ -428,7 +428,7 @@ class SparrowScheduler:
                             finally:
                                 if PREEMPTION.lower() == 'true':
                                     SparrowScheduler.Scheduler.Executor.preempt_task(unenqueued_probes[0], server, scheduler)
-                        event = scheduler.cluster.network.delay(
+                        event = scheduler.network.delay(
                             notify_server, logging_message=message
                         )
                         server.start_task_event(next_probe.task, event) # Block execution loop on server.
@@ -451,7 +451,7 @@ class SparrowScheduler:
                                 server.logger.debug(f'Server: {server.id} notified by scheduler to enqueue task: {probe.task.id}. Simulation time: {server.simulation.time}.')
                                 probe.target_states[server] = probe.States.server_ready
                                 server.control()
-                            event = scheduler.cluster.network.delay(
+                            event = scheduler.network.delay(
                                 enqueue_task, logging_message = f'Notify server: {min_server.id} to enqueue task: {probe.task.id}. Simulation time: {scheduler.simulation.time}.'
                             )
                             scheduler.simulation.event_queue.put(
@@ -463,7 +463,7 @@ class SparrowScheduler:
                                     server.logger.debug(f'Server: {server.id} notified by scheduler to reject task: {probe.task.id}. Simulation time: {server.simulation.time}.')
                                     probe.target_states[server] = probe.States.terminated
                                     server.control()
-                                event = scheduler.cluster.network.delay(
+                                event = scheduler.network.delay(
                                     reject_task, logging_message = f'Notify server: {other_server.id} to reject task: {probe.task.id}. Simulation time: {scheduler.simulation.time}.'
                                 )
                                 scheduler.simulation.event_queue.put(
@@ -625,12 +625,12 @@ class SparrowScheduler:
 
             def server_control(probe, target):
                 try:
-                    server_control_params = probe.simulation.scheduler.cluster.SERVER_CONTROL_PARAMS
+                    server_control_params = probe.simulation.cluster.SERVER_CONTROL_PARAMS
                 except AttributeError:
                     server_control_params = {
                         'late_binding': probe.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['LATE_BINDING']
                     }
-                    probe.simulation.scheduler.cluster.SERVER_CONTROL_PARAMS = server_control_params
+                    probe.simulation.cluster.SERVER_CONTROL_PARAMS = server_control_params
                 else:
                     pass
                 finally:
@@ -825,11 +825,6 @@ class SparrowScheduler:
                 self.bindings.discard(scheduler)
                 while self in scheduler.controls:
                     scheduler.controls.remove(self)       
-                
-            # def __del__(self):
-            #     targets = [target for target in self.bindings]
-            #     for target in targets:
-            #         self.unbind(target)
 
 class LatinSquareScheduler:
 
@@ -877,7 +872,7 @@ class LatinSquareScheduler:
                                 server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has already been completed. Simulation time: {control.simulation.time}.')
                                 control.target_states[server] = control.States.terminated
                                 server.control()
-                            event = scheduler.cluster.network.delay(
+                            event = scheduler.network.delay(
                                 preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has already been completed. Simulation time: {control.simulation.time}.'
                             )
                             scheduler.simulation.event_queue.put(
@@ -897,7 +892,7 @@ class LatinSquareScheduler:
                                                 if control.target_states[server] != control.States.terminated:
                                                     control.target_states[server] = control.States.terminated
                                             server.control()
-                                        event = scheduler.cluster.network.delay(
+                                        event = scheduler.network.delay(
                                             preempt_tasks, logging_message = f'Notify server: {server.id} that task: {control.task.id} has already been enqueued. Simulation time: {control.simulation.time}.'
                                         )
                                         scheduler.simulation.event_queue.put(
@@ -923,7 +918,7 @@ class LatinSquareScheduler:
                                     server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.')
                                     control.target_states[server] = control.States.terminated
                                     server.control()
-                                event = scheduler.cluster.network.delay(
+                                event = scheduler.network.delay(
                                     preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.'
                                 )
                                 scheduler.simulation.event_queue.put(
@@ -955,7 +950,7 @@ class LatinSquareScheduler:
                                     control.bind(server)
                                     control.server_batch_index[server] = idx
                                 server.control()
-                            event = scheduler.cluster.network.delay(
+                            event = scheduler.network.delay(
                                 enqueue_tasks, logging_message=f'Enqueuing tasks: {[control.task.id for control in batch_control.controls]} on server: {server.id}.'
                             )
                             scheduler.simulation.event_queue.put(
@@ -1286,7 +1281,7 @@ class RoundRobinScheduler:
                             def enqueue(server = server, control = control):
                                 control.bind(server)
                                 server.control()
-                            event = scheduler.cluster.network.delay(
+                            event = scheduler.network.delay(
                                 enqueue, logging_message = f'Send message to server: {server.id}, enqueue task: {control.task.id}. Simulation time: {scheduler.simulation.time}.'
                             )
                             scheduler.simulation.event_queue.put(

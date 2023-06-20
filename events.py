@@ -143,7 +143,7 @@ class JobArrival(Arrival):
     def resolve(self):
         job = Job(self.simulation, tasks=self.tasks)
         self.logger.info(f'Job: {job.id}, start time: {job.start_time}.')
-        self.simulation.scheduler.schedule_job(job)
+        self.simulation.cluster.scheduler.schedule_job(job)
 
     def __repr__(self):
         return "JobArrival"

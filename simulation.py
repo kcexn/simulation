@@ -4,11 +4,11 @@ from queue import PriorityQueue
 
 if not __package__:
     from work import Job
-    from computer import Scheduler
+    from computer import *
     import configure
 else:
     from .work import Job
-    from .computer import Scheduler
+    from .computer import *
     from . import configure
 
 logger = logging.getLogger('Simulation')
@@ -27,7 +27,7 @@ class Simulation(object):
         self.work = []
         self._time = Simulation.INITIAL_TIME
         self.event_queue = PriorityQueue()
-        self.scheduler = Scheduler(self)
+        self.cluster = Cluster(self)
 
     @property
     def time(self):
@@ -39,7 +39,7 @@ class Simulation(object):
 
     def run(self):
         self.logger.info('running...')
-        self.scheduler.generate_arrivals()
+        self.cluster.generate_arrivals()
         while not self.event_queue.empty():
             event = self.event_queue.get()
             if event.arrival_time > self.SIMULATION_TIME:
@@ -52,7 +52,7 @@ class Simulation(object):
 __all__ = ['Simulation']
 
 if __name__ == '__main__':
-    # logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
+    logging.basicConfig(filename='logging.log', filemode='w', level='INFO')
     simulation = Simulation()
     simulation.run()
     unfinished_jobs = [job for job in simulation.work if job.__class__ == Job and not job.is_finished]
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     ]
     avg_task_latency = sum(task_latencies)/len(task_latencies)
 
-    server_cum_times = [[server.cumulative_idle_time, server.cumulative_busy_time] for server in simulation.scheduler.cluster.servers]
+    server_cum_times = [[server.cumulative_idle_time, server.cumulative_busy_time] for server in simulation.cluster.servers]
     total_idle_time = sum(times[0] for times in server_cum_times)
     total_busy_time = sum(times[1] for times in server_cum_times)
     average_availability = total_idle_time/(total_idle_time + total_busy_time)

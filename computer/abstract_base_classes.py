@@ -32,7 +32,7 @@ class SchedulerClass(ABC):
     @abstractmethod
     def generate_arrivals(self):
         pass
-
+    
     @abstractmethod
     def schedule_task(self, task, server):
         pass

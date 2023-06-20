@@ -130,7 +130,6 @@ class Server(ServerClass):
         """
         pass
 
-
 class Cluster(object):
     """A Collection of Servers"""
     if __package__ == 'computer':
@@ -141,13 +140,21 @@ class Cluster(object):
     NUM_SERVERS = 6
     def __init__(self,simulation):
         self.simulation = simulation
+        self.arrival_process = ArrivalProcess(simulation)
         self.network = Network(simulation)
         self.NUM_SERVERS = int(simulation.CONFIGURATION['Computer.Cluster']['NUM_SERVERS'])
         self.logger.info(f'NUM_SERVERS: {self.NUM_SERVERS}')
         self._servers = [Server(simulation, self.network) for _ in range(self.NUM_SERVERS)]
         self.logger.info(f'servers have ids: {[server.id for server in self._servers]}')
-        self.controls = deque()
         self.random_choice = RandomChoice(simulation)
+        self.scheduler = Scheduler(simulation, self)
+
+    def generate_arrivals(self):
+        for idx,job in enumerate(self.arrival_process.jobs):
+            if idx < self.simulation.NUM_JOBS:
+                self.simulation.event_queue.put(job)
+            else:
+                break
 
     @property
     def servers(self):
@@ -163,14 +170,6 @@ class Cluster(object):
     
     def __len__(self):
         return len(self._servers)
-    
-    def add_control(self, control):
-        self.controls.append(control)
-
-    def control(self):
-        for _ in range(len(self.controls)):
-            control = self.controls.popleft()
-            control.control()
     
 
 class Network(object):
@@ -194,7 +193,6 @@ class Network(object):
             control = self.controls.popleft()
             control.resolve()
 
-
 class Scheduler(SchedulerClass):
     if __package__ == 'computer':
         from configure import SchedulingPolicies, BlockingPolicies, SchedulerTaskCompletionPolicies
@@ -203,14 +201,14 @@ class Scheduler(SchedulerClass):
     POLICY = 'LatinSquare' # Currently Support RoundRobin, FullRepetition, LatinSquare, Sparrow, 
     LATIN_SQUARE = array(latin_square(6))
     logger = logging.getLogger('Computer.Scheduler')
-    def __init__(self, simulation):
+    def __init__(self, simulation, cluster):
+        self.arrival_process = ArrivalProcess(simulation)
         self.simulation = simulation
+        self.network = cluster.network
         self.POLICY = simulation.CONFIGURATION['Computer.Scheduler']['POLICY']
         self.logger.info(f'Scheduling Policy: {self.POLICY}, Latin Square: {self.LATIN_SQUARE}')
-        self.cluster = Cluster(simulation)
-        self.arrival_process = ArrivalProcess(simulation)
         self.completion_process = CompletionProcess(simulation)
-        self.servers = iter(self.cluster)
+        self.servers = iter(cluster)
         self.controls = deque()
 
     @property
