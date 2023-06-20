@@ -107,10 +107,6 @@ class SchedulingPolicies:
         def func(*args):
             policy = args[0].POLICY
             match policy:
-                case 'Sparrow':
-                    SparrowScheduler.Scheduler.Enqueuing.schedule_batch(*args)
-                case 'LatinSquare':
-                    LatinSquareScheduler.Scheduler.Enqueuing.schedule_batch(*args)
                 case _:
                     SchedulingPolicies.schedule_batch(*args)
         return func
