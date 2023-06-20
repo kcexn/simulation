@@ -800,7 +800,7 @@ class SparrowScheduler:
                     )
 
             def scheduler_bind(self,scheduler):
-                if self not in scheduler.controls:
+                if scheduler not in self.bindings:
                     scheduler.add_control(self)
                     self.bindings.add(scheduler)
                     self.target_states[scheduler] = self.States.server_probed
