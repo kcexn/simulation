@@ -845,7 +845,8 @@ class LatinSquareScheduler:
                 except AttributeError:
                     scheduling_params = {
                         'latin_square_order': scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'],
-                        'num_probes_per_batch': scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['NUM_PROBES_PER_BATCH']
+                        'num_probes_per_batch': scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['NUM_PROBES_PER_BATCH'],
+                        'preemption': scheduler.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['PREEMPTION']
                     }
                     scheduler.SCHEDULING_PARAMS = scheduling_params
                 else:
@@ -883,23 +884,27 @@ class LatinSquareScheduler:
                                 event
                             )
                         else:
-                            server_idx = control.server_batch_index[server]
-                            batch_control = control.batch_controls[server_idx]
-                            if batch_control.target_states[scheduler] != batch_control.States.enqueued:
-                                servers = [serv for serv in control.server_batch_index if control.server_batch_index[serv] == server_idx and serv is not server]
-                                for server in servers:
-                                    def preempt_tasks(batch_control = batch_control, server = server):
-                                        server.logger.debug(f'Server: {server.id} has been notified that tasks: {[control.task.id for control in batch_control.controls]} have been enqueued. Simulation time: {batch_control.simulation.time}.')
-                                        for control in batch_control.controls:
-                                            if control.target_states[server] != control.States.terminated:
-                                                control.target_states[server] = control.States.terminated
-                                        server.control()
-                                    event = scheduler.cluster.network.delay(
-                                        preempt_tasks, logging_message = f'Notify server: {server.id} that task: {control.task.id} has already been enqueued. Simulation time: {control.simulation.time}.'
-                                    )
-                                    scheduler.simulation.event_queue.put(
-                                        event
-                                    )
+                            preemption = scheduler.SCHEDULING_PARAMS['preemption']
+                            if preemption.lower() == 'true':
+                                server_idx = control.server_batch_index[server]
+                                batch_control = control.batch_controls[server_idx]
+                                if batch_control.target_states[scheduler] != batch_control.States.enqueued:
+                                    servers = [serv for serv in control.server_batch_index if control.server_batch_index[serv] == server_idx and serv is not server]
+                                    for server in servers:
+                                        def preempt_tasks(batch_control = batch_control, server = server):
+                                            server.logger.debug(f'Server: {server.id} has been notified that tasks: {[control.task.id for control in batch_control.controls]} have been enqueued. Simulation time: {batch_control.simulation.time}.')
+                                            for control in batch_control.controls:
+                                                if control.target_states[server] != control.States.terminated:
+                                                    control.target_states[server] = control.States.terminated
+                                            server.control()
+                                        event = scheduler.cluster.network.delay(
+                                            preempt_tasks, logging_message = f'Notify server: {server.id} that task: {control.task.id} has already been enqueued. Simulation time: {control.simulation.time}.'
+                                        )
+                                        scheduler.simulation.event_queue.put(
+                                            event
+                                        )
+                                    batch_control.target_states[scheduler] = batch_control.States.enqueued
+                            else:
                                 batch_control.target_states[scheduler] = batch_control.States.enqueued
                     case _:
                         pass
