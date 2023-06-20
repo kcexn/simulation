@@ -71,10 +71,8 @@ class ControlClass(ABC):
     @staticmethod
     def cleanup_control(fn):
         def func(*args):
-            fn(*args)
-            control, target = args
-            if target in control.bindings:
-                target.add_control(control)
+            if fn(*args):
+                args[1].add_control(args[0])
         return func
 
     @property
