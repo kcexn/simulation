@@ -75,7 +75,7 @@ class SchedulingPolicies:
         def func(*args):
             policy = args[0].POLICY
             match policy:
-                case 'RoundRobin':
+                case 'RoundRobin' | 'CompletelyRandom':
                     RoundRobinScheduler.Scheduler.Queue.round_robin(*args)
                     return fn(*args)
                 case 'FullRepetition':
@@ -136,28 +136,39 @@ class ServerSelectionPolicies:
                         cluster_probe_config = cluster.PROBE_CONFIG
                     except AttributeError:
                         cluster_probe_config = {
-                            'num_probes': int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES'])
+                            'num_probes': int(cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['NUM_SPARROW_PROBES']),
+                            'server_selection': cluster.simulation.CONFIGURATION['Computer.Scheduler.Sparrow']['SERVER_SELECTION']
                         }
                         cluster.PROBE_CONFIG = cluster_probe_config
                     else:
                         pass
                     finally:
-                        num_probes = cluster_probe_config['num_probes']
-                        return ServerSelectionPolicies.random(cluster, num_probes)
+                        if cluster_probe_config['server_selection'].lower() == 'cycle':
+                            return ServerSelectionPolicies.cycle(cluster)
+                        else:
+                            num_probes = cluster_probe_config['num_probes']
+                            return ServerSelectionPolicies.random(cluster, num_probes)
                 case 'LatinSquare':
                     try:
                         cluster_control_config = cluster.CONTROL_CONFIG
                     except AttributeError:
                         cluster_control_config = {
-                            'num_tasks': int(cluster.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER'])
+                            'num_tasks': int(cluster.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['LATIN_SQUARE_ORDER']),
+                            'server_selection': cluster.simulation.CONFIGURATION['Computer.Scheduler.LatinSquare']['SERVER_SELECTION']
                         }
+                        cluster.CONTROL_CONFIG = cluster_control_config
                     else:
                         pass
                     finally:
-                        num_tasks = cluster_control_config['num_tasks']
-                        return ServerSelectionPolicies.random(cluster, num_tasks)
+                        if cluster_control_config['server_selection'].lower() == 'cycle':
+                            return ServerSelectionPolicies.cycle(cluster)
+                        else:
+                            num_tasks = cluster_control_config['num_tasks']
+                            return ServerSelectionPolicies.random(cluster, num_tasks)
                 case 'RoundRobin':
                     return ServerSelectionPolicies.cycle(cluster)
+                case 'CompletelyRandom':
+                    return ServerSelectionPolicies.random(cluster,1)
                 case _:
                     return ServerSelectionPolicies.cycle(cluster)
         return func
@@ -189,7 +200,7 @@ class BlockingPolicies:
                 case 'LatinSquare':
                     # LatinSquareScheduler.Server.Queue.block(*args)
                     pass
-                case 'RoundRobin':
+                case 'RoundRobin' | 'CompletelyRandom':
                     pass
                 case _:
                     BlockingPolicies.infinite_queue(*args)
@@ -241,7 +252,7 @@ class ServerTaskExecutionPolicies:
                     SparrowScheduler.Server.Executor.task_complete(*args)
                 case 'LatinSquare':
                     LatinSquareScheduler.Server.Executor.task_complete(*args)
-                case 'RoundRobin':
+                case 'RoundRobin' | 'CompletelyRandom':
                     RoundRobinScheduler.Server.Executor.complete_task(*args)
                 case _:
                     ServerTaskExecutionPolicies.default_task_completion(*args)
@@ -268,7 +279,7 @@ class SchedulerTaskCompletionPolicies:
                     SparrowScheduler.Scheduler.Executor.task_complete(*args,**kwargs)
                 case 'LatinSquare':
                     LatinSquareScheduler.Scheduler.Executor.task_complete(*args, **kwargs)
-                case 'RoundRobin':
+                case 'RoundRobin' | 'CompletelyRandom':
                     RoundRobinScheduler.Scheduler.Executor.complete_task(*args, **kwargs)
                 case _:
                     SchedulerTaskCompletionPolicies.default_task_completion(*args)
@@ -360,8 +371,6 @@ class SparrowScheduler:
                     case batch_control.States.terminated:
                         bindings = set(binding for probe in batch_control.probes for binding in probe.bindings)
                         if len(bindings) == 0:
-                            for probe in batch_control.probes:
-                                probe.unbind(scheduler)
                             batch_control.unbind(scheduler)
                             return False
                         else:
@@ -618,6 +627,8 @@ class SparrowScheduler:
                                 )
                             )
                             return False
+                    case _:
+                        return True
 
 
             def server_control(probe, target):
@@ -717,8 +728,6 @@ class SparrowScheduler:
                 self.bindings.discard(scheduler)
                 while self in scheduler.controls:
                     scheduler.controls.remove(self)
-                for probe in self.probes:
-                    del scheduler.probe_coroutines[probe]
 
         class SparrowProbe(ControlClass):
             """Sparrow Scheduler Probe"""
