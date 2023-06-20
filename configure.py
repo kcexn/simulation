@@ -859,7 +859,6 @@ class LatinSquareScheduler:
         class Executor:
             def task_complete(scheduler, task, server=None):
                 pass
-                # scheduler.control()
 
         class Control:
             def scheduler_coroutine_control(control, scheduler, server=None):
@@ -888,11 +887,8 @@ class LatinSquareScheduler:
                         for server in servers:
                             def preempt_task(control=control, server=server):
                                 server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.')
-                                previous_state = control.target_states[server]
                                 control.target_states[server] = control.States.terminated
                                 server.control()
-                                if previous_state == control.States.server_executing_task:
-                                    server.control()
                             event = scheduler.cluster.network.delay(
                                 preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.'
                             )
