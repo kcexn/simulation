@@ -902,21 +902,22 @@ class LatinSquareScheduler:
                             else:
                                 batch_control.target_states[scheduler] = batch_control.States.enqueued
                     case control.States.task_finished:
-                        servers = [target for target in control.target_states if target.__class__.__name__ == 'Server' and target is not server]
-                        for server in servers:
-                            def preempt_task(control=control, server=server):
-                                server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.')
-                                if control.target_states[server] != control.States.task_finished:
-                                    control.target_states[server] = control.States.terminated
-                                    server.control()
-                            event = scheduler.network.delay(
-                                preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.'
-                            )
-                            scheduler.simulation.event_queue.put(
-                                event
-                            )
-                        control.unbind(scheduler)
-                        control.target_states[scheduler] = control.States.terminated                    
+                        if control.target_states[scheduler] in [control.States.task_finished, control.States.terminated]:
+                            servers = [target for target in control.target_states if target.__class__.__name__ == 'Server' and target is not server]
+                            for server in servers:
+                                def preempt_task(control=control, server=server):
+                                    server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.')
+                                    if control.target_states[server] != control.States.task_finished:
+                                        control.target_states[server] = control.States.terminated
+                                        server.control()
+                                event = scheduler.network.delay(
+                                    preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.'
+                                )
+                                scheduler.simulation.event_queue.put(
+                                    event
+                                )
+                            control.unbind(scheduler)
+                            control.target_states[scheduler] = control.States.terminated                    
                     case _:
                         pass
             
@@ -1042,9 +1043,9 @@ class LatinSquareScheduler:
                             scheduler, = tuple(target for target in control.target_states if target.__class__.__name__ == 'Scheduler')
                             def scheduler_complete_task(scheduler=scheduler, task=control.task, server=server, control=control):
                                 scheduler.logger.debug(f'Notified by server: {server.id}, that task: {task.id} is complete. Simulation time: {scheduler.simulation.time}.')
+                                scheduler.complete_task(task, server=server)
                                 if control.target_states[scheduler] not in [control.States.task_finished, control.States.terminated]:
                                     control.target_states[scheduler] = control.States.task_finished
-                                scheduler.complete_task(task, server=server)
                                 scheduler.control_coroutines[control].send(server)
                             server.simulation.event_queue.put(
                                 server.network.delay(
