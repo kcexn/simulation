@@ -76,7 +76,7 @@ class Server(ServerClass):
     def start_task_event(self, task, event):
         """Stop idling.
         """
-        if self.busy_until == self.simulation.time:
+        if self.is_idle:
             self.tasks[task] = event
             idle_start_time = self.idle_time_triggers['idle_start_time']
             idle_stop_time = self.idle_time_triggers['idle_stop_time']
@@ -96,12 +96,13 @@ class Server(ServerClass):
         else:
             event.cancel()
         finally:
-            idle_start_time = self.idle_time_triggers['idle_start_time']
-            idle_stop_time = self.idle_time_triggers['idle_stop_time']
-            if idle_stop_time >= idle_start_time and self.simulation.time >= idle_stop_time and self.busy_until == self.simulation.time:
-                self.cumulative_busy_time += self.simulation.time - idle_stop_time
-                self.idle_time_triggers ['idle_start_time'] = self.simulation.time
-                self.idle_start_times.add(self.simulation.time)
+            if self.is_idle:
+                idle_start_time = self.idle_time_triggers['idle_start_time']
+                idle_stop_time = self.idle_time_triggers['idle_stop_time']
+                if idle_stop_time >= idle_start_time and self.simulation.time >= idle_stop_time:
+                    self.cumulative_busy_time += self.simulation.time - idle_stop_time
+                    self.idle_time_triggers ['idle_start_time'] = self.simulation.time
+                    self.idle_start_times.add(self.simulation.time)
 
 
     def add_control(self, control):

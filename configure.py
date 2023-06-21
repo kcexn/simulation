@@ -901,33 +901,30 @@ class LatinSquareScheduler:
                                     batch_control.target_states[scheduler] = batch_control.States.enqueued
                             else:
                                 batch_control.target_states[scheduler] = batch_control.States.enqueued
+                    case control.States.task_finished:
+                        servers = [target for target in control.target_states if target.__class__.__name__ == 'Server' and target is not server]
+                        for server in servers:
+                            def preempt_task(control=control, server=server):
+                                server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.')
+                                if control.target_states[server] != control.States.task_finished:
+                                    control.target_states[server] = control.States.terminated
+                                    server.control()
+                            event = scheduler.network.delay(
+                                preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.'
+                            )
+                            scheduler.simulation.event_queue.put(
+                                event
+                            )
+                        control.unbind(scheduler)
+                        control.target_states[scheduler] = control.States.terminated                    
                     case _:
                         pass
             
             def scheduler_control(control, scheduler):
                 match control.target_states[scheduler]:
-                    case control.States.terminated:
+                    case control.States.terminated | control.States.task_finished:
                         return False
-                    case control.States.server_executing_task | control.States.server_enqueued:
-                        return True
-                    case control.States.task_finished:
-                        servers = [binding for binding in control.bindings if binding.__class__.__name__ == 'Server' and control.target_states[binding]]
-                        for server in servers:
-                            if control.target_states[server] != control.States.task_finished:
-                                def preempt_task(control=control, server=server):
-                                    server.logger.debug(f'Server: {server.id} has been notified that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.')
-                                    control.target_states[server] = control.States.terminated
-                                    server.control()
-                                event = scheduler.network.delay(
-                                    preempt_task, logging_message=f'Notify server: {server.id} that task: {control.task.id} has been completed. Simulation time: {control.simulation.time}.'
-                                )
-                                scheduler.simulation.event_queue.put(
-                                    event
-                                )
-                        control.unbind(scheduler)
-                        control.target_states[scheduler] = control.States.terminated
-                        return False
-                    case control.State.blocked:
+                    case _:
                         return True
                     
             def scheduler_batch_control(batch_control, scheduler):
@@ -1048,7 +1045,7 @@ class LatinSquareScheduler:
                                 if control.target_states[scheduler] not in [control.States.task_finished, control.States.terminated]:
                                     control.target_states[scheduler] = control.States.task_finished
                                 scheduler.complete_task(task, server=server)
-                                control.control(scheduler) # This is an optimization to minimize the amount of time spent in the scheduler control loop.
+                                scheduler.control_coroutines[control].send(server)
                             server.simulation.event_queue.put(
                                 server.network.delay(
                                     scheduler_complete_task, logging_message=f'Server: {server.id} to notify scheduler that task: {control.task.id} is complete. Simulation Time: {server.simulation.time}.'
