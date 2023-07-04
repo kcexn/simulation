@@ -1,2 +1,10 @@
 [build-system]
-requires = ["setuptools", "wheel", "numpy>=1.24.3"]
+requires = ["setuptools"]
+
+[project]
+authors = ["Kevin Exton"]
+dependencies = ["numpy>=1.24.3"]
+description = "Cluster Simulation"
+name = "simulation"
+requires-python = ">=3.11"
+version = "0.1"
