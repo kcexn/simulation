@@ -121,24 +121,48 @@ class ArrivalProcess(Process):
 class CompletionProcess(Process):
     """Generates Completion Events"""
     logger = logging.getLogger('Process.CompletionProcess')
-    job_task_service_times = {}
+    service_time_params = {}
     def __init__(self,simulation):
         super(CompletionProcess,self).__init__(simulation)
-
+        self.service_time_config = tuple(True if param=='true' else False for param in
+            (self.simulation.CONFIGURATION['Processes.Completion.Task']['CORRELATED_TASKS'].lower(), 
+             self.simulation.CONFIGURATION['Processes.Completion.Task']['HOMOGENEOUS_TASKS'].lower())
+        )
     def get_task_completion(self, task, offset=0, server=None):
         completion_time=None
-        match self.simulation.CONFIGURATION['Processes.Completion.Task']['POLICY']:
-            case 'RandomJob':
-                if task.job in self.job_task_service_times:
-                    self.logger.debug(f'job: {task.job} has a registered constant service time: {self.job_task_service_times[task.job]}')
-                    completion_time = self.simulation.time + self.job_task_service_times[task.job] + offset
-                else:
-                    self.logger.debug(f'job: {task.job} does not have a registered constant service time.')
-                    interrenewal_time = next(self.interrenewal_times)
-                    self.job_task_service_times[task.job] = interrenewal_time
-                    completion_time = self.simulation.time + interrenewal_time + offset
-            case 'RandomTask':
-                completion_time = self.simulation.time + next(self.interrenewal_times) + offset
+        if self.service_time_config == (True, True):
+            # Correlated and Homogeneous
+            if task.job in self.service_time_params:
+                self.logger.debug(f'job: {task.job.id} has a registered constant service time: {self.service_time_params[task.job]}')
+                completion_time = self.simulation.time + self.service_time_params[task.job] + offset
+            else:
+                self.logger.debug(f'job: {task.job.id} does not have a registered constant service time.')
+                interrenewal_time = next(self.interrenewal_times)
+                self.service_time_params[task.job] = interrenewal_time
+                completion_time = self.simulation.time + interrenewal_time + offset
+        elif self.service_time_config == (True, False):
+            # Correlated and Heterogeneous
+            if task in self.service_time_params:
+                self.logger.debug(f'task: {task.id} has a registered service time: {self.service_time_params[task]}')
+                completion_time = self.simulation.time + self.service_time_params[task] + offset
+            else:
+                self.logger.debug(f'task: {task.id} does not have a registered scale parameter.')
+                interrenewal_time = next(self.interrenewal_times)
+                self.service_time_params[task] = interrenewal_time
+                completion_time = self.simulation.time + interrenewal_time + offset
+        elif self.service_time_config == (False, True):
+            # Uncorrelated and Homogeneous
+            completion_time = self.simulation.time + next(self.interrenewal_times) + offset
+        else:
+            # Correlated and Homogeneous
+            if task in self.service_time_params:
+                self.logger.debug(f'task: {task.id} has a registered scale parameter.')
+                completion_time = self.simulation.time + self.rng.exponential(self.service_time_params[task]) + offset
+            else:
+                self.logger.debug(f'task: {task.id} does not have a registered scale parameter.')
+                scale_param = next(self.interrenewal_times)
+                self.service_time_params[task] = scale_param
+                completion_time = self.simulation.time + self.rng.exponential(scale_param) + offset
         event = TaskCompletion(self.simulation, task, completion_time, offset=offset, server=server)
         return event
     

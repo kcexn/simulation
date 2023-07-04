@@ -1046,7 +1046,7 @@ class LatinSquareScheduler:
                                 scheduler.complete_task(task, server=server)
                                 if control.target_states[scheduler] not in [control.States.task_finished, control.States.terminated]:
                                     control.target_states[scheduler] = control.States.task_finished
-                                scheduler.control_coroutines[control].send(server)
+                                    scheduler.control_coroutines[control].send(server)
                             server.simulation.event_queue.put(
                                 server.network.delay(
                                     scheduler_complete_task, logging_message=f'Server: {server.id} to notify scheduler that task: {control.task.id} is complete. Simulation Time: {server.simulation.time}.'
