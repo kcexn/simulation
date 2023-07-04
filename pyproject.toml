@@ -2,7 +2,9 @@
 requires = ["setuptools", "wheel"]
 
 [project]
-authors = ["Kevin Exton"]
+authors = [
+    {name = "Kevin Exton", email = "kcexton01@gmail.com"}
+]
 dependencies = ["numpy>=1.24.3"]
 description = "Cluster Simulation"
 name = "simulation"
