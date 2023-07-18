@@ -13,7 +13,7 @@ else:
 
 logger = logging.getLogger('Simulation')
 class Simulation(object):
-    CONFIGURATION = configure.configuration()
+    CONFIGURATION = configure.configuration('./simulation/configuration.ini')
     INITIAL_TIME=0
     NUM_JOBS=int(CONFIGURATION['Simulation']['NUM_JOBS'])
     SIMULATION_TIME=float(CONFIGURATION['Simulation']['SIMULATION_TIME'])
@@ -52,9 +52,15 @@ class Simulation(object):
 __all__ = ['Simulation']
 
 if __name__ == '__main__':
+    import datetime
     logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
+    start_time = datetime.datetime.now()
+    print(f'start time: {start_time}')
     simulation = Simulation()
     simulation.run()
+    finish_time = datetime.datetime.now()
+    print(f'finish time: {finish_time}')
+    print(f'running time: {finish_time - start_time}')
     unfinished_jobs = [job for job in simulation.work if job.__class__ == Job and not job.is_finished]
     logging.debug(f'unfinished jobs: {[job.id for job in unfinished_jobs]}')
     logging.debug(f'unfinished tasks: {[task.id for job in unfinished_jobs for task in job.tasks if not task.is_finished]}')
