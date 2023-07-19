@@ -13,7 +13,22 @@ else:
 
 logger = logging.getLogger('Simulation')
 class Simulation(object):
-    CONFIGURATION = configure.configuration('./simulation/configuration.ini')
+    """
+    Simulation([configuration=configparser.ConfigParser()]) -> Simulation
+
+    Constructs a cluster computing simulation that is configured either by 
+    a ConfigParser configuration object that is passed in, or 
+    if no configuration is provided checks for a file called configuration.ini 
+    either in the current directory '.', or in a subdirectory './simulation'.
+    In case, a configuration.ini file exists in both '.' and './simulation', 
+    the configuration.ini file in the current directory is selected.
+    """
+    import os
+    CONFIGURATION_PATH = ['./simulation', '.']
+    CONFIGURATION = None
+    for p in CONFIGURATION_PATH:
+        if os.path.isfile(f'{p}/configuration.ini'):
+            CONFIGURATION = configure.configuration(f'{p}/configuration.ini')
     INITIAL_TIME=0
     NUM_JOBS=int(CONFIGURATION['Simulation']['NUM_JOBS'])
     SIMULATION_TIME=float(CONFIGURATION['Simulation']['SIMULATION_TIME'])
