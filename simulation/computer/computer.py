@@ -17,11 +17,13 @@ logger = logging.getLogger('Computer')
 
 class Server(ServerClass):
     """Class to keep track of server status"""
+    #TODO: Can I put each of these in a separate thread of control?
     if __package__ == 'computer':
         from configure import ServerTaskExecutionPolicies
     else:
         from ..configure import ServerTaskExecutionPolicies
     logger = logging.getLogger('Computer.Server')
+    debug_log = logger.isEnabledFor(logging.DEBUG)
     def __init__(self, simulation, network):
         self.simulation = simulation
         self.network = network
@@ -61,13 +63,14 @@ class Server(ServerClass):
             
     @property
     def is_idle(self):
-        if self._last_idle_check_time == self.simulation.time and self._memoized_tasks == self.tasks:
-            return self._memoized_busy_until == self.simulation.time
+        simulation_time = self.simulation._time
+        if self._last_idle_check_time == simulation_time and self._memoized_tasks == self.tasks:
+            return self._memoized_busy_until == simulation_time
         else:
-            self._last_idle_check_time = self.simulation.time
+            self._last_idle_check_time = simulation_time
             self._memoized_tasks = {task: self.tasks[task] for task in self.tasks}
             self._memoized_busy_until = self.busy_until
-            return self._memoized_busy_until == self.simulation.time
+            return self._memoized_busy_until == simulation_time
     
     @property
     def id(self):
@@ -109,9 +112,10 @@ class Server(ServerClass):
         self.controls.append(control)
 
     def control(self):
-        self.logger.debug(
-            f'Entering control loop of server: {self.id}, registered controls are: {[(control, control.id) for control in self.controls]}. Simulation time: {self.simulation.time}'
-            )
+        if self.debug_log:
+            self.logger.debug(
+                f'Entering control loop of server: {self.id}, registered controls are: {[(control, control.id) for control in self.controls]}. Simulation time: {self.simulation.time}'
+                )
         num_controls = len(self.controls)
         for _ in range(num_controls):
             control = self.controls.popleft()

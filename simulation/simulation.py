@@ -68,7 +68,7 @@ __all__ = ['Simulation']
 
 if __name__ == '__main__':
     import datetime
-    logging.basicConfig(filename='logging.log', filemode='w', level='DEBUG')
+    logging.basicConfig(filename='logging.log', filemode='w', level='CRITICAL')
     start_time = datetime.datetime.now()
     print(f'start time: {start_time}')
     simulation = Simulation()
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         job in jobs
     ]
 
-    with open('sim_data.csv', 'w', newline='') as f:
+    with open('./simulation/sim_data.csv', 'w', newline='') as f:
         writer = csv.writer(f, dialect='excel')
         writer.writerow(['start time', 'finish time', 'num tasks', 'job latency'])
         writer.writerows(sim_data)

@@ -995,8 +995,10 @@ class LatinSquareScheduler:
                     server.control()
 
         class Control:
+
             def latin_square_server_control(control, server):
-                server.logger.debug(f'Server: {server.id}, entered control loop for task: {control.task.id}; currently in state: {control.target_states[server]}. Simulation time: {server.simulation.time}.')
+                if server.debug_log:
+                    server.logger.debug(f'Server: {server.id}, entered control loop for task: {control.task.id}; currently in state: {control.target_states[server]}. Simulation time: {server.simulation.time}.')
                 match control.target_states[server]:
                     case control.States.server_enqueued:
                         if server.is_idle:
@@ -1018,9 +1020,7 @@ class LatinSquareScheduler:
                                 server.enqueue_task(control.task)
                             )
                             control.target_states[server] = control.States.server_executing_task
-                        return True
-                    case control.States.server_executing_task:
-                        return True                            
+                        return True                     
                     case control.States.terminated:
                         try:
                             server.stop_task_event(control.task)
@@ -1053,7 +1053,7 @@ class LatinSquareScheduler:
                                 )
                             )
                             return False
-                    case control.States.blocked:
+                    case _:
                         return True
 
             def server_control(control, server):
