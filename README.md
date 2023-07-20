@@ -7,6 +7,7 @@ as a python script:
 `python simulation.py`
 ## Configuration:
 Simulation Parameters are kept in a file called configuration.ini in the working directory and contains the parameters:
+```
 [Simulation]
 NUM_JOBS = 500
 SIMULATION_TIME = 2500.0
@@ -55,6 +56,7 @@ HOMOGENEOUS_TASKS = False
 
 [Work.Job]
 NUM_TASKS = 100
+```
 
 ### Configure Jobs and Tasks
 - A task is a unit of work that is assigned to a server by the scheduler.
