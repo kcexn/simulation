@@ -6,31 +6,55 @@ as a python script:
 
 `python simulation.py`
 ## Configuration:
-Simulation Parameters are kept in configuration.ini and contain the parameters:
-    [Simulation]
-    NUM_JOBS = 5000
-    SIMULATION_TIME = 36000.0
+Simulation Parameters are kept in a file called configuration.ini in the working directory and contains the parameters:
+[Simulation]
+NUM_JOBS = 500
+SIMULATION_TIME = 2500.0
 
-    [Computer]
+[Computer]
 
-    [Computer.Cluster]
-    NUM_SERVERS = 6
+[Computer.Cluster]
+NUM_SERVERS = 10000
 
-    [Computer.Scheduler]
-    POLICY = LatinSquare
-    LATIN_SQUARE_ORDER = 6
+[Computer.Scheduler]
+POLICY = LatinSquare
 
-    [Processes]
+[Computer.Scheduler.LatinSquare]
+LATIN_SQUARE_ORDER = 2
+PREEMPTION = True
+SERVER_SELECTION = RANDOM
+NUM_PROBES_PER_BATCH = 1
 
-    [Processes.Arrival]
-    INITIAL_TIME = 0.0
-    SCALE = 0.167
+[Computer.Scheduler.Sparrow]
+NUM_SPARROW_PROBES = 1
+PREEMPTION = True
+LATE_BINDING = True
+BATCH_SIZE = 2
+SERVER_SELECTION = RANDOM
 
-    [Work]
+[Computer.Network]
+MEAN_DELAY = 0.0000001
+DELAY_STD = 0.0000000001
 
-    [Work.Job]
-    NUM_TASKS=6
+[Processes]
 
+[Processes.Arrival]
+INITIAL_TIME = 0.0
+SCALE = 0.000111111111
+
+[Processes.Arrival.Job]
+POLICY = Erlang
+
+[Processes.Completion]
+
+[Processes.Completion.Task]
+CORRELATED_TASKS = True
+HOMOGENEOUS_TASKS = False
+
+[Work]
+
+[Work.Job]
+NUM_TASKS = 100
 
 ### Configure Jobs and Tasks
 - A task is a unit of work that is assigned to a server by the scheduler.
