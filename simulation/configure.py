@@ -303,7 +303,7 @@ class SparrowScheduler:
                     for batch in batches:
                         batch_control = SparrowScheduler.Controls.SparrowBatch(scheduler.simulation, batch)
                         batch_control.bind(scheduler)
-                    scheduler.control()
+                        batch_control.control(scheduler)
 
         class Executor:
             def task_complete(scheduler, task, server=None):
@@ -857,7 +857,7 @@ class LatinSquareScheduler:
                             batch_controls.rotate(-i)
                             batch_control = LatinSquareScheduler.Controls.LatinSquareBatch(scheduler.simulation, batch_controls)
                             batch_control.bind(scheduler)
-                    scheduler.control()
+                            batch_control.control(scheduler)
 
         class Executor:
             def task_complete(scheduler, task, server=None):
@@ -930,17 +930,9 @@ class LatinSquareScheduler:
                     
             def scheduler_batch_control(batch_control, scheduler):
                 match batch_control.target_states[scheduler]:
-                    case batch_control.States.enqueued:
-                        binding_lengths = [len(control.bindings)==0 for control in batch_control.controls]
-                        if all(binding_lengths):
-                            batch_control.unbind(scheduler)
-                            return False
-                        return True
-                    case batch_control.States.blocked:
-                        return True
                     case batch_control.States.unenqueued:
                         num_probes_per_batch = int(scheduler.SCHEDULING_PARAMS['num_probes_per_batch'])
-                        idx = batch_control.controls[0].batch_controls.index(batch_control)
+                        idx = batch_control.controls[0].batch_control_indices[batch_control]
                         for _ in range(num_probes_per_batch):
                             server = next(scheduler.servers)
                             def enqueue_tasks(controls = batch_control.controls, server = server, idx=idx):
@@ -955,6 +947,13 @@ class LatinSquareScheduler:
                                 event
                             )
                             batch_control.target_states[scheduler] = batch_control.States.blocked
+                        return True
+                    case batch_control.States.enqueued:
+                        if all(len(control.bindings)==0 for control in batch_control.controls):
+                            batch_control.unbind(scheduler)
+                            return False
+                        return True
+                    case batch_control.States.blocked:
                         return True
                     case batch_control.States.terminated:
                         return False
@@ -1020,17 +1019,7 @@ class LatinSquareScheduler:
                                 server.enqueue_task(control.task)
                             )
                             control.target_states[server] = control.States.server_executing_task
-                        return True                     
-                    case control.States.terminated:
-                        try:
-                            server.stop_task_event(control.task)
-                        except KeyError:
-                            pass
-                        else:
-                            pass
-                        finally:
-                            control.unbind(server)
-                            return False
+                        return True      
                     case control.States.task_finished:
                         try:
                             server.stop_task_event(control.task)
@@ -1052,6 +1041,16 @@ class LatinSquareScheduler:
                                     scheduler_complete_task, logging_message=f'Server: {server.id} to notify scheduler that task: {control.task.id} is complete. Simulation Time: {server.simulation.time}.'
                                 )
                             )
+                            return False               
+                    case control.States.terminated:
+                        try:
+                            server.stop_task_event(control.task)
+                        except KeyError:
+                            pass
+                        else:
+                            pass
+                        finally:
+                            control.unbind(server)
                             return False
                     case _:
                         return True
@@ -1085,6 +1084,7 @@ class LatinSquareScheduler:
                 self.target_states = {}
                 for control in self.controls:
                     control.batch_controls.append(self)
+                    control.batch_control_indices[self] = len(control.batch_controls)
                 self.logger.debug(f'Controls in batch: {[control.id for control in self.controls]}. Simulation time: {self.simulation.time}.')
 
             @ControlClass.cleanup_control
@@ -1144,9 +1144,6 @@ class LatinSquareScheduler:
 
             def unbind_scheduler(self, scheduler):
                 self.bindings.discard(scheduler)
-                while self in scheduler.controls:
-                    scheduler.controls.remove(self)
-
 
         class LatinSquareControl(ControlClass):
             """Latin Square Scheduler Control
@@ -1171,6 +1168,7 @@ class LatinSquareScheduler:
                 self.server_batch_index = {}
                 self.task = task
                 self.batch_controls = batch_controls
+                self.batch_control_indices = {}
                 self.logger.debug(f'Task: {task.id} bound to Control: {self.id}. Simulation time: {self.simulation.time}.')
 
             @property

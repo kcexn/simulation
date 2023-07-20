@@ -116,8 +116,7 @@ class Server(ServerClass):
             self.logger.debug(
                 f'Entering control loop of server: {self.id}, registered controls are: {[(control, control.id) for control in self.controls]}. Simulation time: {self.simulation.time}'
                 )
-        num_controls = len(self.controls)
-        for _ in range(num_controls):
+        for _ in range(len(self.controls)):
             control = self.controls.popleft()
             control.control(self)
 
@@ -189,14 +188,7 @@ class Network(object):
     def delay(self, callback, *args, logging_message = ''):
         self.logger.info(logging_message)
         return self.delay_process.delay(callback, *args)
-    
-    def add_control(self, control):
-        self.controls.append(control)
 
-    def control(self):
-        for _ in range(len(self.controls)):
-            control = self.controls.popleft()
-            control.resolve()
 
 class Scheduler(SchedulerClass):
     if __package__ == 'computer':
@@ -206,6 +198,7 @@ class Scheduler(SchedulerClass):
     POLICY = 'LatinSquare' # Currently Support RoundRobin, FullRepetition, LatinSquare, Sparrow, 
     LATIN_SQUARE = array(latin_square(6))
     logger = logging.getLogger('Computer.Scheduler')
+    debug_log = logger.isEnabledFor(logging.DEBUG)
     def __init__(self, simulation, cluster):
         self.arrival_process = ArrivalProcess(simulation)
         self.simulation = simulation
@@ -270,7 +263,8 @@ class Scheduler(SchedulerClass):
         self.controls.append(control)
 
     def control(self):
-        self.logger.debug(f'Entering Scheduler Control Loop. Simulation Time {self.simulation.time}')
+        if self.debug_log:
+            self.logger.debug(f'Entering Scheduler Control Loop. Simulation Time {self.simulation.time}')
         for _ in range(len(self.controls)):
             control = self.controls.popleft()
             control.control(self)

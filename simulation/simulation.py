@@ -12,6 +12,7 @@ else:
     from . import configure
 
 logger = logging.getLogger('Simulation')
+
 class Simulation(object):
     """
     Simulation([configuration=configparser.ConfigParser()]) -> Simulation
@@ -24,6 +25,7 @@ class Simulation(object):
     the configuration.ini file in the current directory is selected.
     """
     import os
+    __slots__ = ('__dict__','_time')
     CONFIGURATION_PATH = ['./simulation', '.']
     CONFIGURATION = None
     for p in CONFIGURATION_PATH:
