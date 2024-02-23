@@ -82,14 +82,12 @@ class Job(Work):
         super(Job, self).__init__(simulation)
         self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
         self.logger.debug(f'NUM_TASKS: {self.NUM_TASKS}')
-        if len(tasks) == 0:
+        if len(tasks) < 1:
             self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
-        elif len(tasks) == self.NUM_TASKS:
+        else:
             self._tasks = tasks
             for task in self._tasks:
                 task.job = self
-        else:
-            raise TypeError(f'A list of {len(tasks)} tasks was passed to the {self}, however, {self.NUM_TASKS} was expected.')
 
     @property
     def tasks(self):
