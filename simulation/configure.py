@@ -1013,7 +1013,7 @@ class PeacockScheduler:
                             try:
                                 waiting_threshold = server.peacock_waiting_threshold
                             except AttributeError:
-                                waiting_threshold = int(server.simulation.CONFIGURATION['Computer.Scheduler.Peacock']['WAITING_THRESHOLD'])
+                                waiting_threshold = float(server.simulation.CONFIGURATION['Computer.Scheduler.Peacock']['WAITING_THRESHOLD'])
                                 server.peacock_waiting_threshold = waiting_threshold
                             else:
                                 pass
