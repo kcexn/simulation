@@ -977,7 +977,7 @@ class PeacockScheduler:
                             _servers = control.simulation.cluster._servers
                             next_server = _servers[(_servers.index(server)+1)%len(_servers)]
                             if next_server is not server:
-                                scheduler, = tuple(target for target in control.target_states if target.__class__.__name__ == 'Scheduler')
+                                scheduler = server.simulation.cluster.scheduler
                                 def forward_task(control=control, server=next_server):
                                     control.bind(server)
                                     server.control()
