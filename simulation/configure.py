@@ -966,8 +966,13 @@ class PeacockScheduler:
                     # Estimate the waiting time of this task
                     estimated_waiting_time = 0
                     for cntrl in server.controls:
+                        cntrl_service_time = server.completion_process.estimated_service_time(cntrl.task)
+                        control_service_time = server.completion_process.estimated_service_time(control.task)
+                        if cntrl_service_time > control_service_time or (cntrl_service_time == control_service_time and cntrl.server_arrival_times[server] > control.server_arrival_times[server]):
+                            # the controls are sorted by estimated service time so we can just stop the search here.
+                            break
                         # add the estimated service time
-                        estimated_waiting_time += server.completion_process.estimated_service_time(cntrl.task)
+                        estimated_waiting_time += cntrl_service_time
                         if cntrl.target_states[server] == control.States.server_executing:
                             # add only the remaining estimated service time.
                             estimated_waiting_time += (cntrl.execution_start_time - control.simulation.time)
