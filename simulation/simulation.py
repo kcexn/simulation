@@ -106,7 +106,7 @@ if __name__ == '__main__':
     total_idle_time = sum(times[0] for times in server_cum_times)
     total_busy_time = sum(times[1] for times in server_cum_times)
     average_availability = total_idle_time/(total_idle_time + total_busy_time)
-    print(f'{average_availability}')
+    print(f'Average availability: {average_availability}')
 
     print(f'Average Job Latency: {sum(latencies)/simulation.NUM_JOBS}')
     print(f'Average Task Latency: {avg_task_latency}')

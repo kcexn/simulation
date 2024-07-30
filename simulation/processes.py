@@ -129,7 +129,6 @@ class CompletionProcess(Process):
              self.simulation.CONFIGURATION['Processes.Completion.Task']['HOMOGENEOUS_TASKS'].lower())
         )
         
-    @property
     def estimated_service_time(self, task):
         # Some schedulers assume that accurate service time estimates can be made.
         # We implement an approximation of service time estimation with this property.

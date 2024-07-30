@@ -78,6 +78,9 @@ class SchedulingPolicies:
                 case 'RoundRobin' | 'CompletelyRandom':
                     RoundRobinScheduler.Scheduler.Queue.round_robin(*args)
                     return fn(*args)
+                case 'Peacock':
+                    PeacockScheduler.Scheduler.Enqueuing.peacock(*args)
+                    return fn(*args)
                 case 'FullRepetition':
                     SchedulingPolicies.full_repetition(*args)
                     return fn(*args)
@@ -163,6 +166,22 @@ class ServerSelectionPolicies:
                             latin_square_order = cluster_control_config['latin_square_order']
                             num_probes_per_batch = cluster_control_config['num_probes_per_batch']
                             return ServerSelectionPolicies.random(cluster, latin_square_order*num_probes_per_batch)
+                case 'Peacock':
+                    try:
+                        cluster_control_config = cluster.CONTROL_CONFIG
+                    except AttributeError:
+                        cluster_control_config = {
+                            'server_selection': cluster.simulation.CONFIGURATION['Computer.Scheduler.Peacock']['SERVER_SELECTION']
+                        }
+                        cluster.CONTROL_CONFIG = cluster_control_config
+                    else:
+                        pass
+                    finally:
+                        match cluster_control_config['server_selection'].lower():
+                            case 'random':
+                                return ServerSelectionPolicies.random(cluster,1)
+                            case _:
+                                return ServerSelectionPolicies.cycle(cluster)
                 case 'RoundRobin':
                     return ServerSelectionPolicies.cycle(cluster)
                 case 'CompletelyRandom':
@@ -879,6 +898,8 @@ class PeacockScheduler:
                     case control.States.server_finished | control.States.terminated:
                         control.unbind(scheduler)
                         return False
+                    case _:
+                        raise Exception(f"Unhandled scheduler state")
 
     class Server:
         class Queue:
@@ -905,13 +926,14 @@ class PeacockScheduler:
                 """Peacock tasks are scheduled by RPC. So after
                 tasks complete on the server, the server needs to enter the control loop.
                 """
+                server.logger.debug(f'Server: {server.id},with tasks: {[control.task.id for control in server.controls if control.__class__.__name__ == "PeacockProbe"]}, has completed task: {task.id}')
                 control, = tuple(control for control in server.controls if control.__class__.__name__ == 'PeacockProbe' and task is control.task)
                 control.target_states[server] = control.States.server_finished
                 server.control()
                 
             def pull_task_and_start_executing(control, server):
                 def pull_task(control = control, server=server):
-                    scheduler, = tuple(target, for target in control.target_states if target.__class__.__name__ == 'Scheduler')
+                    scheduler, = tuple(target for target in control.target_states if target.__class__.__name__ == 'Scheduler')
                     scheduler.logger.debug(f'Received message from server: {server.id}, that it is ready to execute: {control.task.id}. Simulation time: {scheduler.simulation.time}.')
                     # scheduler.control_coroutines[control].send(server)
                     def start_task(control=control, server=server):
@@ -923,7 +945,7 @@ class PeacockScheduler:
                     server.start_task_event(control.task, event) # Server is not idle
                     return event
                 event = server.network.delay(
-                    pull_task, logging_message=f"Send message to scheduler, ready to start task: {control.task.id} on server {server.id}. Simulation time: {control.simulation.time}'
+                    pull_task, logging_message=f"Send message to scheduler, ready to start task: {control.task.id} on server {server.id}. Simulation time: {control.simulation.time}"
                 )
                 server.start_task_event(control.task, event) # Server is no longer idle.
                 control.target_states[server] = control.States.blocked # Ready to begin task execution on scheduler response.
@@ -933,43 +955,52 @@ class PeacockScheduler:
                 return True
                 
             def place_or_rotate(control, server, waiting_threshold):
+                server.logger.debug(f'Place or rotate for task: {control.task.id} on server: {server.id}, simulation time: {server.simulation.time}.')
                 cutoff_time = control.task.start_time + waiting_threshold - control.simulation.time
                 if cutoff_time <= 0:
                     # the waiting threshold has passed, so just keep this task enqueued.
+                    server.logger.debug(f'Server: {server.id} keeping task: {control.task.id} enqueued.')
                     return True
                 else:
+                    server.logger.debug(f'Estimate waiting time for Place or rotate for task: {control.task.id} on server: {server.id}, simulation time: {server.simulation.time}.')
                     # Estimate the waiting time of this task
                     estimated_waiting_time = 0
-                    for control in server.controls:
-                        if control.target_states[server] == control.States.server_executing:
+                    for cntrl in server.controls:
+                        if cntrl.target_states[server] == control.States.server_executing:
                             # add only the remaining estimated service time.
-                            estimated_waiting_time += (control.execution_start_time + server.completion_process.estimated_service_time(control.task) - control.simulation.time)
+                            estimated_waiting_time += (cntrl.execution_start_time + server.completion_process.estimated_service_time(cntrl.task) - control.simulation.time)
                         else:
                             # add the estimated service time
-                            estimated_waiting_time += server.completion_process.estimated_service_time(control.task)
+                            estimated_waiting_time += server.completion_process.estimated_service_time(cntrl.task)
                         # if the estimated waiting time is greater than the cutoff time then we rotate
                         if estimated_waiting_time > cutoff_time:
-                            # forward the probe to the next server in the cluster
+                            # forward the probe to the next server in the cluster only if the next server in the cluster is not the first server in the cluster though.
                             _servers = control.simulation.cluster._servers
                             next_server = _servers[(_servers.index(server)+1)%len(_servers)]
-                            scheduler, = tuple(target, for target in control.target_states if target.__class__.__name__ == 'Scheduler')
-                            def forward_task(control=control, server=next_server):
-                                control.bind(server)
-                                server.control()
-                            control.simulation.event_queue.put(
-                                scheduler.network.delay(
-                                    forward_task, logging_message=f'Forward task: {control.task} to server: {next_server}. Simulation time: {control.simulation.time}.'
+                            if next_server is not server:
+                                scheduler, = tuple(target for target in control.target_states if target.__class__.__name__ == 'Scheduler')
+                                def forward_task(control=control, server=next_server):
+                                    control.bind(server)
+                                    server.control()
+                                control.simulation.event_queue.put(
+                                    scheduler.network.delay(
+                                        forward_task, logging_message=f'Forward task: {control.task} to server: {next_server}. Simulation time: {control.simulation.time}.'
+                                    )
                                 )
-                            )
-                            control.target_states[server] = control.States.server_rotated
-                            control.unbind(server)
-                            return False
-                    # else the total waiting time in this server does not exceed the cutoff and we can stay enqueued.
-                    return True
+                                control.target_states[server] = control.States.server_rotated
+                            break
+                    if control.target_states[server] == control.States.server_rotated:
+                        control.unbind(server)
+                        server.logger.debug(f'Server: {server.id} forwarding task: {control.task.id} to server: {server.id}.')
+                        return False
+                    else:
+                        # else the total waiting time in this server does not exceed the cutoff and we can stay enqueued.
+                        server.logger.debug(f'Server: {server.id} keeping task: {control.task.id} enqueued.')
+                        return True
 
         class Control:
             def peacock_server_control(control, server):
-                control.logger.debug(f'Server: {server.id}, control loop for Sparrow Probe: {control.id}, state: {control.target_states[server]}, simulation time: {control.simulation.time}')
+                control.logger.debug(f'Server: {server.id}, control loop for PeacockProbe: {control.id} with task: {control.task.id}, state: {control.target_states[server].name}, simulation time: {control.simulation.time}')
                 match control.target_states[server]:
                     case control.States.server_probed:
                         if server.is_idle:
@@ -982,22 +1013,22 @@ class PeacockScheduler:
                             try:
                                 waiting_threshold = server.peacock_waiting_threshold
                             except AttributeError:
-                                waiting_threshold = int(scheduler.simulation.CONFIGURATION['Computer.Scheduler.Peacock']['WAITING_THRESHOLD'])
+                                waiting_threshold = int(server.simulation.CONFIGURATION['Computer.Scheduler.Peacock']['WAITING_THRESHOLD'])
                                 server.peacock_waiting_threshold = waiting_threshold
                             else:
                                 pass
                             finally:
                                 return PeacockScheduler.Server.Executor.place_or_rotate(control, server, waiting_threshold)
-                        return True
+                        raise Exception(f'State is not properly handled.')
                     case control.States.server_start:
                         control.execution_start_time = control.simulation.time
                         control.simulation.event_queue.put(
                             server.enqueue_task(control.task)
                         )
-                        control.target_states[server] = control.States.server_executing_task
+                        control.target_states[server] = control.States.server_executing
                         return True
-                    case control.States.server_executing_task | control.States.blocked | control.States.server_init:
-                        pass
+                    case control.States.server_executing | control.States.blocked | control.States.server_init:
+                        return True
                     case control.States.server_finished:
                         try:
                             # Although the event loop will ensure that the task finish time is measured properly.
@@ -1060,7 +1091,7 @@ class PeacockScheduler:
             states = States
             logger = logging.getLogger('computer.Control.PeacockProbe')
             def __init__(self, simulation, task):
-                super(SparrowScheduler.Controls.SparrowProbe, self).__init__(simulation)
+                super(PeacockScheduler.Controls.PeacockProbe, self).__init__(simulation)
                 self.creation_time = self.simulation.time
                 self.server_arrival_times = {}
                 self.server_queue_lengths = {}
@@ -1115,8 +1146,10 @@ class PeacockScheduler:
                 from collections import deque
                 if self not in target.controls:
                     target.add_control(self)
+                    self.target_states[target] = self.States.server_init
                     # sort the probe queue on the server by estimated service time.
-                    target.controls = deque(sorted(target.controls, key=lambda control: target.completion_process.estimated_service_time(task)))
+                    sort_states = [self.States.server_init, self.States.server_probed]
+                    target.controls = deque(sorted(target.controls, key=lambda control: target.completion_process.estimated_service_time(control.task) if control.target_states[target] in sort_states else 0))
                     self.bindings.add(target)
                     self.target_states[target] = self.States.server_probed
                     self.server_arrival_times[target] = self.simulation.time
@@ -1129,30 +1162,6 @@ class PeacockScheduler:
                     self.bindings.add(scheduler)
                     scheduler.add_control(self)
                     self.target_states[scheduler] = self.States.server_init
-                    # def control_coroutine(control=self, scheduler=scheduler):
-                        # while True:
-                            # server = yield
-                            # def start_task(control=control, server=server):
-                                # control.target_states[server] = control.States.server_start
-                                # server.control()
-                            # event = scheduler.network.delay(
-                                # start_task, logging_message=f'Notify server: {server}, to start task: {control.task}. Simulation time: {control.simulation.time}.'
-                            # )
-                            # server.start_task_event(next_probe.task, event) # Server is not idle
-                            # probe.simulation.event_queue.put(
-                                # event
-                            # )
-                    # try:
-                        # control_coroutines = scheduler.control_coroutines
-                    # except AttributeError:
-                        # control_coroutines = {
-                            # self: control_coroutine()
-                        # }
-                        # scheduler.control_coroutines = control_coroutines
-                    # else:
-                        # control_coroutines[self] = control_coroutines()
-                    # finally:
-                        # next(control_coroutines[self]) # Prime the coroutine   
                     self.logger.debug(f'Scheduler bound to PeacockProbe: {self.id}, for task: {self.task.id}. Simulation Time: {self.simulation.time}.')
                 
             def unbind(self, target):
@@ -1164,13 +1173,13 @@ class PeacockScheduler:
                         self.unbind_scheduler(target)
 
             def unbind_server(self, server):
-                self.logger.debug(f'Unbinding server: {server.id}, from Sparrow Probe: {self.id}. Simulation time: {self.simulation.time}.')
+                self.logger.debug(f'Unbinding server: {server.id}, from PeacockProbe: {self.id} containing task: {self.task.id}. Simulation time: {self.simulation.time}.')
                 self.bindings.discard(server)
                 while self in server.controls:
                     server.controls.remove(self)
 
             def unbind_scheduler(self, scheduler):
-                self.logger.debug(f'Unbinding scheduler from sparrow probe: {self.id}. Simulation time: {self.simulation.time}.')
+                self.logger.debug(f'Unbinding scheduler from PeacockProbe: {self.id}. Simulation time: {self.simulation.time}.')
                 self.bindings.discard(scheduler)
                 while self in scheduler.controls:
                     scheduler.controls.remove(self)       

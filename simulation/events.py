@@ -181,7 +181,7 @@ class Now(ControlEvent):
     logger = logging.getLogger('Event.SimulationEvent.ControlEvent.Now')
     def __init__(self,simulation, callback, *args):
         super(Now, self).__init__(simulation, simulation.time, callback, *args)
-        self.logger.debug(f"Method: {callback}, arrival time: {arrival_time}, simulation time: {simulation.time}')
+        self.logger.debug(f'Method: {callback}, arrival time: {arrival_time}, simulation time: {simulation.time}')
 
 class BlockingDelay(ControlEvent):
     """Blocking Delay"""
