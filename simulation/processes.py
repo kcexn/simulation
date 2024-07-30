@@ -128,6 +128,41 @@ class CompletionProcess(Process):
             (self.simulation.CONFIGURATION['Processes.Completion.Task']['CORRELATED_TASKS'].lower(), 
              self.simulation.CONFIGURATION['Processes.Completion.Task']['HOMOGENEOUS_TASKS'].lower())
         )
+        
+    @property
+    def estimated_service_time(self, task):
+        # Some schedulers assume that accurate service time estimates can be made.
+        # We implement an approximation of service time estimation with this property.
+        # We assume that for correlated task servicing, extremely accurate estimates can be made from aggregate statistics, and so we return the exact service time value.
+        # We assume that for uncorrelated task servicing, task service time estimates will simply return the mean or expected value of the task service time (which for us is unit).
+        match self.service_time_config:
+            case (True, True):
+                # Correlated and Homogeneous
+                if task.job in self.service_time_params:
+                    self.logger.debug(f'job: {task.job.id} has a registered constant service time: {self.service_time_params[task.job]}')
+                    return self.service_time_params[task.job]
+                else:
+                    self.logger.debug(f'job: {task.job.id} does not have a registered constant service time.')
+                    service_time = next(self.interrenewal_times)
+                    self.service_time_params[task.job] = service_time
+                    return service_time
+            case (True, False):
+                # Correlated and Heterogeneous
+                if task in self.service_time_params:
+                    self.logger.debug(f'task: {task.id} has a registered service time: {self.service_time_params[task]}')
+                    return self.service_time_params[task]
+                else:
+                    self.logger.debug(f'task: {task.id} does not have a registered scale parameter.')
+                    service_time = next(self.interrenewal_times)
+                    self.service_time_params[task] = service_time
+                    return service_time
+            case (False, True):
+                # Uncorrelated and Homogeneous
+                return 1
+            case (False, False):
+                # Correlated and Homogeneous
+                return 1
+        
     def get_task_completion(self, task, offset=0, server=None):
         completion_time=None
         if self.service_time_config == (True, True):

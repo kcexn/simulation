@@ -175,6 +175,13 @@ class NetworkDelay(NetworkEvent):
     def __init__(self,simulation,arrival_time, callback,*args):
         super(NetworkDelay,self).__init__(simulation,arrival_time,callback,*args)
         self.logger.debug(f'Method: {callback}, arrival time: {arrival_time}, simulation time: {simulation.time}')
+        
+class Now(ControlEvent):
+    """An event that occurs NOW to pass the control flow to a different logical component."""
+    logger = logging.getLogger('Event.SimulationEvent.ControlEvent.Now')
+    def __init__(self,simulation, callback, *args):
+        super(Now, self).__init__(simulation, simulation.time, callback, *args)
+        self.logger.debug(f"Method: {callback}, arrival time: {arrival_time}, simulation time: {simulation.time}')
 
 class BlockingDelay(ControlEvent):
     """Blocking Delay"""

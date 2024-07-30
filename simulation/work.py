@@ -76,18 +76,30 @@ class Task(Work):
 
 class Job(Work):
     """A Collection of Tasks"""
-    NUM_TASKS = 1
     logger = logging.getLogger('Work.Job')
     def __init__(self,simulation, tasks=[]):
         super(Job, self).__init__(simulation)
-        self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
-        self.logger.debug(f'NUM_TASKS: {self.NUM_TASKS}')
-        if len(tasks) < 1:
-            self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
+        try:
+            self.NUM_TASKS = Job.NUM_TASKS
+        except AttributeError:
+            try:
+                self.NUM_TASKS = int(self.simulation.CONFIGURATION['Work.Job']['NUM_TASKS'])
+            except KeyError:
+                self.NUM_TASKS = 1
+            else:
+                pass
+            finally:
+                Job.NUM_TASKS = self.NUM_TASKS
         else:
-            self._tasks = tasks
-            for task in self._tasks:
-                task.job = self
+            pass
+        finally:
+            self.logger.debug(f'NUM_TASKS: {self.NUM_TASKS}')
+            if len(tasks) < 1:
+                self._tasks = [Task(simulation,job=self) for _ in range(self.NUM_TASKS)]
+            else:
+                self._tasks = tasks
+                for task in self._tasks:
+                    task.job = self
 
     @property
     def tasks(self):

@@ -109,7 +109,8 @@ class Server(ServerClass):
 
 
     def add_control(self, control):
-        self.controls.append(control)
+        if control not in self.controls:
+            self.controls.append(control)
 
     def control(self):
         if self.debug_log:
