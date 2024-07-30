@@ -966,12 +966,11 @@ class PeacockScheduler:
                     # Estimate the waiting time of this task
                     estimated_waiting_time = 0
                     for cntrl in server.controls:
+                        # add the estimated service time
+                        estimated_waiting_time += server.completion_process.estimated_service_time(cntrl.task)
                         if cntrl.target_states[server] == control.States.server_executing:
                             # add only the remaining estimated service time.
-                            estimated_waiting_time += (cntrl.execution_start_time + server.completion_process.estimated_service_time(cntrl.task) - control.simulation.time)
-                        else:
-                            # add the estimated service time
-                            estimated_waiting_time += server.completion_process.estimated_service_time(cntrl.task)
+                            estimated_waiting_time += (cntrl.execution_start_time - control.simulation.time)
                         # if the estimated waiting time is greater than the cutoff time then we rotate
                         if estimated_waiting_time > cutoff_time:
                             # forward the probe to the next server in the cluster only if the next server in the cluster is not the first server in the cluster though.
@@ -988,15 +987,13 @@ class PeacockScheduler:
                                     )
                                 )
                                 control.target_states[server] = control.States.server_rotated
+                                control.unbind(server)
+                                server.logger.debug(f'Server: {server.id} forwarding task: {control.task.id} to server: {server.id}.')
+                                return False
                             break
-                    if control.target_states[server] == control.States.server_rotated:
-                        control.unbind(server)
-                        server.logger.debug(f'Server: {server.id} forwarding task: {control.task.id} to server: {server.id}.')
-                        return False
-                    else:
-                        # else the total waiting time in this server does not exceed the cutoff and we can stay enqueued.
-                        server.logger.debug(f'Server: {server.id} keeping task: {control.task.id} enqueued.')
-                        return True
+                    # else the total waiting time in this server does not exceed the cutoff and we can stay enqueued.
+                    server.logger.debug(f'Server: {server.id} keeping task: {control.task.id} enqueued.')
+                    return True
 
         class Control:
             def peacock_server_control(control, server):
