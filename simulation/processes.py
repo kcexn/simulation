@@ -138,20 +138,20 @@ class CompletionProcess(Process):
             case (True, True):
                 # Correlated and Homogeneous
                 if task.job in self.service_time_params:
-                    self.logger.debug(f'job: {task.job.id} has a registered constant service time: {self.service_time_params[task.job]}')
+                    # self.logger.debug(f'job: {task.job.id} has a registered constant service time: {self.service_time_params[task.job]}')
                     return self.service_time_params[task.job]
                 else:
-                    self.logger.debug(f'job: {task.job.id} does not have a registered constant service time.')
+                    # self.logger.debug(f'job: {task.job.id} does not have a registered constant service time.')
                     service_time = next(self.interrenewal_times)
                     self.service_time_params[task.job] = service_time
                     return service_time
             case (True, False):
                 # Correlated and Heterogeneous
                 if task in self.service_time_params:
-                    self.logger.debug(f'task: {task.id} has a registered service time: {self.service_time_params[task]}')
+                    # self.logger.debug(f'task: {task.id} has a registered service time: {self.service_time_params[task]}')
                     return self.service_time_params[task]
                 else:
-                    self.logger.debug(f'task: {task.id} does not have a registered scale parameter.')
+                    # self.logger.debug(f'task: {task.id} does not have a registered scale parameter.')
                     service_time = next(self.interrenewal_times)
                     self.service_time_params[task] = service_time
                     return service_time
@@ -159,9 +159,16 @@ class CompletionProcess(Process):
                 # Uncorrelated and Homogeneous
                 return 1
             case (False, False):
-                # Correlated and Homogeneous
-                return 1
-        
+                # Correlated and Heterogeneous
+                if task in self.service_time_params:
+                    # self.logger.debug(f'task: {task.id} has a registered scale parameter.')
+                    return self.service_time_params[task]
+                else:
+                    # self.logger.debug(f'task: {task.id} does not have a registered scale parameter.')
+                    scale_param = next(self.interrenewal_times)
+                    self.service_time_params[task] = scale_param
+                    return scale_param
+                    
     def get_task_completion(self, task, offset=0, server=None):
         completion_time=None
         if self.service_time_config == (True, True):
@@ -188,7 +195,7 @@ class CompletionProcess(Process):
             # Uncorrelated and Homogeneous
             completion_time = self.simulation.time + next(self.interrenewal_times) + offset
         else:
-            # Correlated and Homogeneous
+            # Uncorrelated and Heterogeneous
             if task in self.service_time_params:
                 self.logger.debug(f'task: {task.id} has a registered scale parameter.')
                 completion_time = self.simulation.time + self.rng.exponential(self.service_time_params[task]) + offset
